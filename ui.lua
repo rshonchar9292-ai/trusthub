@@ -1,5 +1,5 @@
 --// ==================================================
---// TrustHub UI — Fling tab with player list
+--// TrustHub UI v7.0 — 6 tabs, R15 animations only
 --// ==================================================
 
 local TweenService     = game:GetService("TweenService")
@@ -268,7 +268,7 @@ local function createActionButton(parent, text, color, callback)
     return Btn
 end
 
---// PLAYER ROW (avatar + name + role)
+--// PLAYER ROW
 local function createPlayerRow(parent, plr, role, roleColor, callback)
     local row = Instance.new("TextButton")
     row.Size = UDim2.new(1, -8, 0, 46)
@@ -279,7 +279,6 @@ local function createPlayerRow(parent, plr, role, roleColor, callback)
     row.Parent = parent
     corner(row, 8)
 
-    -- Role color stripe on left
     local stripe = Instance.new("Frame")
     stripe.Size = UDim2.new(0, 3, 0.6, 0)
     stripe.Position = UDim2.new(0, 0, 0.2, 0)
@@ -288,7 +287,6 @@ local function createPlayerRow(parent, plr, role, roleColor, callback)
     stripe.Parent = row
     corner(stripe, 999)
 
-    -- Avatar
     local avatar = Instance.new("ImageLabel")
     avatar.Size = UDim2.new(0, 34, 0, 34)
     avatar.Position = UDim2.new(0, 10, 0.5, -17)
@@ -298,7 +296,6 @@ local function createPlayerRow(parent, plr, role, roleColor, callback)
     avatar.Parent = row
     corner(avatar, 999)
 
-    -- Load avatar async
     task.spawn(function()
         local ok, thumb = pcall(function()
             return Players:GetUserThumbnailAsync(
@@ -312,7 +309,6 @@ local function createPlayerRow(parent, plr, role, roleColor, callback)
         end
     end)
 
-    -- Name
     local nameLbl = Instance.new("TextLabel")
     nameLbl.Size = UDim2.new(1, -100, 0, 18)
     nameLbl.Position = UDim2.new(0, 52, 0, 5)
@@ -325,7 +321,6 @@ local function createPlayerRow(parent, plr, role, roleColor, callback)
     nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
     nameLbl.Parent = row
 
-    -- Role
     local roleLbl = Instance.new("TextLabel")
     roleLbl.Size = UDim2.new(1, -100, 0, 14)
     roleLbl.Position = UDim2.new(0, 52, 0, 23)
@@ -337,7 +332,6 @@ local function createPlayerRow(parent, plr, role, roleColor, callback)
     roleLbl.TextXAlignment = Enum.TextXAlignment.Left
     roleLbl.Parent = row
 
-    -- Fling indicator
     local flingIcon = Instance.new("TextLabel")
     flingIcon.Size = UDim2.new(0, 30, 1, 0)
     flingIcon.Position = UDim2.new(1, -36, 0, 0)
@@ -346,15 +340,8 @@ local function createPlayerRow(parent, plr, role, roleColor, callback)
     flingIcon.TextSize = 16
     flingIcon.Parent = row
 
-    -- Hover
-    row.MouseEnter:Connect(function()
-        tween(row, 0.15, {BackgroundColor3 = Theme.ElementHov})
-    end)
-    row.MouseLeave:Connect(function()
-        tween(row, 0.15, {BackgroundColor3 = Theme.Element})
-    end)
-
-    -- Click → fling
+    row.MouseEnter:Connect(function() tween(row, 0.15, {BackgroundColor3 = Theme.ElementHov}) end)
+    row.MouseLeave:Connect(function() tween(row, 0.15, {BackgroundColor3 = Theme.Element}) end)
     row.MouseButton1Click:Connect(function()
         createRipple(row, Mouse.X - row.AbsolutePosition.X, Mouse.Y - row.AbsolutePosition.Y)
         callback(plr)
@@ -362,9 +349,10 @@ local function createPlayerRow(parent, plr, role, roleColor, callback)
     return row
 end
 
+--// ==================================================
 --// UI:init
+--// ==================================================
 function UI:init(Features)
-    --// ScreenGui
     local ScreenGui = Instance.new("ScreenGui")
     ScreenGui.Name = "TrustHubUI"
     ScreenGui.ResetOnSpawn = false
@@ -482,6 +470,17 @@ function UI:init(Features)
     Title.TextSize = 15
     Title.TextXAlignment = Enum.TextXAlignment.Left
     Title.Parent = Header
+
+    local VersionLbl = Instance.new("TextLabel")
+    VersionLbl.Size = UDim2.new(0, 60, 1, 0)
+    VersionLbl.Position = UDim2.new(1, -100, 0, 0)
+    VersionLbl.BackgroundTransparency = 1
+    VersionLbl.Text = "v7.0"
+    VersionLbl.TextColor3 = Theme.TextDim
+    VersionLbl.Font = Enum.Font.Gotham
+    VersionLbl.TextSize = 11
+    VersionLbl.TextXAlignment = Enum.TextXAlignment.Right
+    VersionLbl.Parent = Header
 
     local CloseBtn = Instance.new("TextButton")
     CloseBtn.Size = UDim2.new(0, 26, 0, 26)
@@ -628,18 +627,23 @@ function UI:init(Features)
         return Page
     end
 
-    --// Tabs
-    local AimPage      = createTab("Aimbot", "A")
-    local FlingPage    = createTab("Fling", "F")
-    local VisualsPage  = createTab("Visuals", "V")
-    local MovePage     = createTab("Movement", "M")
-    local SettingsPage = createTab("Settings", "S")
+    --// 6 Tabs
+    local AimPage       = createTab("Aimbot", "A")
+    local FlingPage     = createTab("Fling", "F")
+    local VisualsPage   = createTab("Visuals", "V")
+    local MovePage      = createTab("Movement", "M")
+    local AnimationPage = createTab("Animation", "🎭")
+    local SettingsPage  = createTab("Settings", "S")
 
+    --// ==================================================
     --// AIMBOT TAB
+    --// ==================================================
     createSection(AimPage, "Silent Aim")
+
     createToggle(AimPage, "Enable Silent Aim", false, function(v)
         if Features.SilentAim then Features.SilentAim:setEnabled(v) end
     end)
+
     createSlider(AimPage, "Hit Chance %", 1, 100, 100, function(v)
         if Features.SilentAim and Features.SilentAim.setHitChance then 
             Features.SilentAim:setHitChance(v) 
@@ -647,21 +651,18 @@ function UI:init(Features)
     end)
 
     --// ==================================================
-    --// FLING TAB — Quick buttons + Player list
+    --// FLING TAB
     --// ==================================================
     createSection(FlingPage, "Quick Actions")
 
-    -- FLING SHERIFF
     createActionButton(FlingPage, "FLING SHERIFF", Theme.Sheriff, function()
         if Features.Fling then Features.Fling:flingSheriff() end
     end)
 
-    -- FLING MURDER
     createActionButton(FlingPage, "FLING MURDER", Theme.Murderer, function()
         if Features.Fling then Features.Fling:flingMurderer() end
     end)
 
-    -- Player list section
     createSection(FlingPage, "Players — Click to Fling")
 
     local playerListFrame = Instance.new("Frame")
@@ -687,17 +688,12 @@ function UI:init(Features)
     listLayout.SortOrder = Enum.SortOrder.LayoutOrder
     listLayout.Parent = playerListScroll
 
-    -- Refresh function
     local function refreshPlayerList()
-        -- Clear old rows
         for _, child in ipairs(playerListScroll:GetChildren()) do
-            if child:IsA("TextButton") then
-                child:Destroy()
-            end
+            if child:IsA("TextButton") then child:Destroy() end
         end
 
-        if not Features.Fling then return end
-        if not Features.Fling.getPlayersWithRoles then return end
+        if not Features.Fling or not Features.Fling.getPlayersWithRoles then return end
 
         local list = Features.Fling:getPlayersWithRoles()
         for _, data in ipairs(list) do
@@ -713,7 +709,6 @@ function UI:init(Features)
         end
     end
 
-    -- Initial + periodic refresh
     task.spawn(function()
         task.wait(1)
         pcall(refreshPlayerList)
@@ -722,8 +717,11 @@ function UI:init(Features)
         end
     end)
 
+    --// ==================================================
     --// VISUALS TAB
+    --// ==================================================
     createSection(VisualsPage, "ESP")
+
     createToggle(VisualsPage, "Enable ESP", false, function(v)
         if Features.ESP then Features.ESP:setEnabled(v) end
     end)
@@ -747,21 +745,171 @@ function UI:init(Features)
     legendText.TextYAlignment = Enum.TextYAlignment.Center
     legendText.Parent = legendFrame
 
+    --// ==================================================
     --// MOVEMENT TAB
+    --// ==================================================
+    createSection(MovePage, "Noclip")
+
+    createToggle(MovePage, "Enable Noclip", false, function(v)
+        if Features.Noclip then Features.Noclip:setEnabled(v) end
+    end)
+
+    createSection(MovePage, "Auto Gun")
+
+    createToggle(MovePage, "Auto Pickup Gun", false, function(v)
+        if Features.AutoGun then Features.AutoGun:setEnabled(v) end
+    end)
+
+    local autogunInfo = Instance.new("TextLabel")
+    autogunInfo.Size = UDim2.new(1, -16, 0, 40)
+    autogunInfo.BackgroundTransparency = 1
+    autogunInfo.Text = "Auto-teleports to any gun on the map\nand picks it up instantly."
+    autogunInfo.TextColor3 = Theme.TextDim
+    autogunInfo.Font = Enum.Font.Gotham
+    autogunInfo.TextSize = 11
+    autogunInfo.TextXAlignment = Enum.TextXAlignment.Left
+    autogunInfo.TextYAlignment = Enum.TextYAlignment.Top
+    autogunInfo.TextWrapped = true
+    autogunInfo.Parent = MovePage
+
     createSection(MovePage, "Speed")
+
     createToggle(MovePage, "Enable Speed", false, function(v)
         if Features.Speed then Features.Speed:setEnabled(v) end
     end)
+
     createSlider(MovePage, "Speed Value", 16, 200, 32, function(v)
         if Features.Speed and Features.Speed.setValue then 
             Features.Speed:setValue(v) 
         end
     end)
 
+    --// ==================================================
+    --// ANIMATION TAB (R15 sets only)
+    --// ==================================================
+    createSection(AnimationPage, "R15 Animation Sets")
+
+    -- Info label
+    local animInfoFrame = Instance.new("Frame")
+    animInfoFrame.Size = UDim2.new(1, -16, 0, 40)
+    animInfoFrame.BackgroundColor3 = Theme.Element
+    animInfoFrame.BorderSizePixel = 0
+    animInfoFrame.Parent = AnimationPage
+    corner(animInfoFrame, 8)
+
+    local animInfoText = Instance.new("TextLabel")
+    animInfoText.Size = UDim2.new(1, -20, 1, 0)
+    animInfoText.Position = UDim2.new(0, 10, 0, 0)
+    animInfoText.BackgroundTransparency = 1
+    animInfoText.Text = "Works only on R15 characters. Click to apply."
+    animInfoText.TextColor3 = Theme.TextDim
+    animInfoText.Font = Enum.Font.Gotham
+    animInfoText.TextSize = 11
+    animInfoText.TextXAlignment = Enum.TextXAlignment.Left
+    animInfoText.TextYAlignment = Enum.TextYAlignment.Center
+    animInfoText.Parent = animInfoFrame
+
+    -- Animations list container
+    local animListFrame = Instance.new("Frame")
+    animListFrame.Size = UDim2.new(1, -16, 0, 400)
+    animListFrame.BackgroundColor3 = Theme.Element
+    animListFrame.BorderSizePixel = 0
+    animListFrame.Parent = AnimationPage
+    corner(animListFrame, 8)
+
+    local animScroll = Instance.new("ScrollingFrame")
+    animScroll.Size = UDim2.new(1, -8, 1, -8)
+    animScroll.Position = UDim2.new(0, 4, 0, 4)
+    animScroll.BackgroundTransparency = 1
+    animScroll.BorderSizePixel = 0
+    animScroll.ScrollBarThickness = 3
+    animScroll.ScrollBarImageColor3 = Theme.Accent
+    animScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    animScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    animScroll.Parent = animListFrame
+
+    local animListLayout = Instance.new("UIListLayout")
+    animListLayout.Padding = UDim.new(0, 4)
+    animListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    animListLayout.Parent = animScroll
+
+    -- Store button references for highlighting active
+    local animButtons = {}
+    local activeAnimName = nil
+
+    local function setActiveAnim(name)
+        for animName, btn in pairs(animButtons) do
+            if animName == name then
+                tween(btn, 0.2, {BackgroundColor3 = Theme.Accent})
+                btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            else
+                tween(btn, 0.2, {BackgroundColor3 = Theme.Element})
+                btn.TextColor3 = Theme.Text
+            end
+        end
+        activeAnimName = name
+    end
+
+    -- Populate animations list
+    if Features.Animation and Features.Animation.getAnimationList then
+        local list = Features.Animation:getAnimationList()
+        for _, name in ipairs(list) do
+            local btn = Instance.new("TextButton")
+            btn.Size = UDim2.new(1, -4, 0, 32)
+            btn.BackgroundColor3 = Theme.Element
+            btn.Text = name
+            btn.TextColor3 = Theme.Text
+            btn.Font = Enum.Font.GothamMedium
+            btn.TextSize = 12
+            btn.BorderSizePixel = 0
+            btn.AutoButtonColor = false
+            btn.Parent = animScroll
+            corner(btn, 6)
+
+            btn.MouseEnter:Connect(function()
+                if activeAnimName ~= name then
+                    tween(btn, 0.15, {BackgroundColor3 = Theme.ElementHov})
+                end
+            end)
+            btn.MouseLeave:Connect(function()
+                if activeAnimName ~= name then
+                    tween(btn, 0.15, {BackgroundColor3 = Theme.Element})
+                end
+            end)
+            btn.MouseButton1Click:Connect(function()
+                createRipple(btn, Mouse.X - btn.AbsolutePosition.X, Mouse.Y - btn.AbsolutePosition.Y)
+                if Features.Animation then
+                    Features.Animation:playAnimationSet(name)
+                    setActiveAnim(name)
+                end
+            end)
+
+            animButtons[name] = btn
+        end
+    end
+
+    -- Reset button
+    createSection(AnimationPage, "Controls")
+
+    createActionButton(AnimationPage, "RESET ANIMATIONS", Theme.Danger, function()
+        if Features.Animation then
+            Features.Animation:reset()
+            -- Clear highlight
+            for _, btn in pairs(animButtons) do
+                tween(btn, 0.2, {BackgroundColor3 = Theme.Element})
+                btn.TextColor3 = Theme.Text
+            end
+            activeAnimName = nil
+        end
+    end)
+
+    --// ==================================================
     --// SETTINGS TAB
+    --// ==================================================
     createSection(SettingsPage, "Info")
+
     local infoFrame = Instance.new("Frame")
-    infoFrame.Size = UDim2.new(1, -16, 0, 140)
+    infoFrame.Size = UDim2.new(1, -16, 0, 160)
     infoFrame.BackgroundColor3 = Theme.Element
     infoFrame.BorderSizePixel = 0
     infoFrame.Parent = SettingsPage
@@ -771,7 +919,7 @@ function UI:init(Features)
     infoText.Size = UDim2.new(1, -20, 1, 0)
     infoText.Position = UDim2.new(0, 10, 0, 0)
     infoText.BackgroundTransparency = 1
-    infoText.Text = "TrustHub v5.0\n\nF4  — toggle menu\nT   — open/close\nC   — toggle Silent Aim\n\nFling tab: click player to fling"
+    infoText.Text = "TrustHub v7.0\n\nF4  — toggle menu\nT   — open/close\nC   — toggle Silent Aim\n\nTabs:\nAimbot | Fling | Visuals | Movement | Animation | Settings"
     infoText.TextColor3 = Theme.TextDim
     infoText.Font = Enum.Font.Gotham
     infoText.TextSize = 12
@@ -798,7 +946,7 @@ function UI:init(Features)
         opening = true
         Main.Visible = true
         Main.Size = UDim2.new(0, 0, 0, 0)
-        tween(Main, 0.35, {Size = UDim2.new(0, 580, 0, 520)}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+        tween(Main, 0.35, {Size = UDim2.new(0, 580, 0, 500)}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
         tween(FloatingBtn, 0.25, {BackgroundTransparency = 0.6})
         task.delay(0.35, function() isOpen = true; opening = false end)
     end

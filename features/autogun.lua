@@ -1,37 +1,25 @@
 --// ╔══════════════════════════════════════════════════════════════╗
---// ║  TrustHub Auto Gun v2.0                                      ║
---// ║  Auto-teleports to any gun on the map and picks it up         ║
+--// ║  TrustHub Auto Gun v3.0 — Working Version                    ║
 --// ╚══════════════════════════════════════════════════════════════╝
 
-local Players          = game:GetService("Players")
-local RunService       = game:GetService("RunService")
-local StarterGui       = game:GetService("StarterGui")
+local Players    = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local StarterGui = game:GetService("StarterGui")
 
 local LocalPlayer = Players.LocalPlayer
 
---// ============================================================
---//  CONFIG
---// ============================================================
 local Config = {
-    Enabled       = false,
-    MaxDistance   = 500,       -- максимальна дистанція пошуку (studs)
-    TeleportDelay = 0.1,       -- затримка між телепортами
-    InstantPickup = true,      -- підбирати одразу після телепорту
-    NotifyOnPickup = true,     -- показувати повідомлення
-    OnlySheriffGun = false,    -- тільки пістолет Sheriff-а
+    MaxDistance    = 500,
+    TeleportDelay  = 0.1,
+    InstantPickup  = true,
+    NotifyOnPickup = true,
 }
 
---// ============================================================
---//  STATE
---// ============================================================
 local enabled = false
 local conn = nil
 local lastTeleport = 0
-local pickedUp = {}  -- щоб не підбирати одне й те саме
+local pickedUp = {}
 
---// ============================================================
---//  NOTIFY
---// ============================================================
 local function notify(title, text, duration)
     pcall(function()
         StarterGui:SetCore("SendNotification", {
@@ -44,10 +32,7 @@ end
 
 local function log(msg) print("[AutoGun] " .. msg) end
 
---// ============================================================
---//  GUN DETECTION
---// ============================================================
--- Назви, які вважаються пістолетом
+--// Назви пістолетів
 local GUN_KEYWORDS = {
     "gun", "pistol", "sheriff", "revolver", "magnum",
     "weapon", "shoot", "handgun"
@@ -67,15 +52,11 @@ local function isGunTool(obj)
     return isGunName(obj.Name)
 end
 
---// ============================================================
---//  PICKUP LOGIC
---// ============================================================
 local function teleportTo(position)
     local char = LocalPlayer.Character
     if not char then return end
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
-
     pcall(function()
         hrp.CFrame = CFrame.new(position + Vector3.new(0, 3, 0))
     end)
@@ -87,64 +68,52 @@ local function tryPickup(tool)
     local hum = char:FindFirstChildOfClass("Humanoid")
     if not hum then return false end
 
-    -- Метод 1: через Humanoid:EquipTool()
     local ok = pcall(function()
         hum:EquipTool(tool)
     end)
     if ok then
-        log("Picked up via EquipTool: " .. tool.Name)
+        log("Picked via EquipTool: " .. tool.Name)
         return true
     end
 
-    -- Метод 2: зміна Parent
     pcall(function()
         tool.Parent = char
     end)
-
-    log("Picked up via Parent: " .. tool.Name)
+    log("Picked via Parent: " .. tool.Name)
     return true
 end
 
---// ============================================================
---//  SCAN FOR GUNS
---// ============================================================
 local function scanForGuns()
     local char = LocalPlayer.Character
     if not char then return end
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
 
-    -- Перевіряємо чи вже тримаємо пістолет
+    -- Вже тримаємо пістолет?
     local currentTool = char:FindFirstChildWhichIsA("Tool")
-    if currentTool and isGunTool(currentTool) then
-        return  -- вже тримаємо
-    end
+    if currentTool and isGunTool(currentTool) then return end
 
     local bestGun = nil
     local bestDist = math.huge
 
-    -- 1. Шукаємо пістолети в Workspace (лежать на землі)
+    -- 1. Workspace
     for _, obj in ipairs(workspace:GetDescendants()) do
-        if isGunTool(obj) then
-            -- Пропускаємо, якщо вже підбирали
-            if pickedUp[obj] then continue end
-
-            -- Пропускаємо, якщо гравець вже тримає цей Tool
+        if isGunTool(obj) and not pickedUp[obj] then
             local holder = Players:GetPlayerFromCharacter(obj.Parent)
-            if holder then continue end
-
-            local handle = obj:FindFirstChild("Handle")
-            if handle then
-                local dist = (hrp.Position - handle.Position).Magnitude
-                if dist < bestDist and dist <= Config.MaxDistance then
-                    bestDist = dist
-                    bestGun = obj
+            if not holder then
+                local handle = obj:FindFirstChild("Handle")
+                if handle then
+                    local dist = (hrp.Position - handle.Position).Magnitude
+                    if dist < bestDist and dist <= Config.MaxDistance then
+                        bestDist = dist
+                        bestGun = obj
+                    end
                 end
             end
         end
     end
 
-    -- 2. Шукаємо пістолети в Backpack інших гравців (якщо Sheriff помер)
+    -- 2. Backpack інших
     if not bestGun then
         for _, plr in ipairs(Players:GetPlayers()) do
             if plr == LocalPlayer then continue end
@@ -166,7 +135,6 @@ local function scanForGuns()
         end
     end
 
-    -- 3. Знайшли — телепортуємось і підбираємо
     if bestGun then
         local handle = bestGun:FindFirstChild("Handle")
         if not handle then return end
@@ -181,20 +149,15 @@ local function scanForGuns()
             task.wait(0.05)
             tryPickup(bestGun)
             pickedUp[bestGun] = true
-
             if Config.NotifyOnPickup then
-                notify("🔫 Auto Gun", "Picked up: " .. bestGun.Name, 2)
+                notify("🔫 Auto Gun", "Picked: " .. bestGun.Name, 2)
             end
         end
     end
 end
 
---// ============================================================
---//  MAIN LOOP
---// ============================================================
 local function startLoop()
     if conn then conn:Disconnect() end
-
     conn = RunService.Heartbeat:Connect(function()
         if not enabled then return end
         pcall(scanForGuns)
@@ -208,16 +171,12 @@ local function stopLoop()
     end
 end
 
---// ============================================================
---//  MODULE
---// ============================================================
 local AutoGun = {}
 AutoGun.__index = AutoGun
 
 function AutoGun.new()
     local self = setmetatable({}, AutoGun)
 
-    -- Автоматичне перепідключення при респавні
     LocalPlayer.CharacterAdded:Connect(function()
         task.wait(0.5)
         pickedUp = {}
@@ -228,8 +187,6 @@ end
 
 function AutoGun:setEnabled(state)
     enabled = state
-    Config.Enabled = state
-
     if state then
         startLoop()
         log("ON")
@@ -242,15 +199,13 @@ function AutoGun:setEnabled(state)
 end
 
 function AutoGun:setMaxDistance(v) Config.MaxDistance = v end
+function AutoGun:setRange(v) Config.MaxDistance = v end
 function AutoGun:setInstantPickup(v) Config.InstantPickup = v end
+function AutoGun:setAutoEquip(v) end
 function AutoGun:setNotify(v) Config.NotifyOnPickup = v end
 
--- Заглушки для сумісності з UI
-function AutoGun:setRange(v) Config.MaxDistance = v end
-function AutoGun:setAutoEquip(v) end
-
 log("═══════════════════════════════")
-log("TrustHub Auto Gun v2.0 loaded")
+log("TrustHub Auto Gun v3.0 loaded")
 log("═══════════════════════════════")
 
 return AutoGun.new()

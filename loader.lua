@@ -1,51 +1,111 @@
---// TrustHub - Loader
+--// TrustHub - Loader v2
 --// Author: rshonchar9292-ai
---// Version: 1.0.0
 
 local BASE_URL = "https://raw.githubusercontent.com/rshonchar9292-ai/trusthub/main/"
 
---// Функція завантаження модулів
-local function load(module)
-    local url = BASE_URL .. module .. ".lua"
-    local success, result = pcall(function()
-        return game:HttpGet(url)
-    end)
-    if not success then
-        warn("[TrustHub] Не вдалося завантажити: " .. module)
-        return nil
-    end
-    local fn, err = loadstring(result)
-    if not fn then
-        warn("[TrustHub] Помилка компіляції " .. module .. ": " .. tostring(err))
-        return nil
-    end
-    return fn()
+--// ==================================================
+--// ДІАГНОСТИКА
+--// ==================================================
+local function log(msg)
+    print("[TrustHub] " .. tostring(msg))
 end
 
---// Перевірка версії
-local CURRENT_VERSION = "1.0.0"
-pcall(function()
-    local remoteVersion = game:HttpGet(BASE_URL .. "version.txt")
-    if remoteVersion and remoteVersion ~= CURRENT_VERSION then
-        print("[TrustHub] Доступне оновлення: " .. remoteVersion)
+local function notify(title, text, duration)
+    pcall(function()
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = title,
+            Text = text,
+            Duration = duration or 5,
+        })
+    end)
+end
+
+--// ==================================================
+--// ЗАВАНТАЖЕННЯ МОДУЛЯ
+--// ==================================================
+local function loadModule(path)
+    local url = BASE_URL .. path .. ".lua"
+    log("Завантажую: " .. path)
+    
+    local ok, code = pcall(function()
+        return game:HttpGet(url)
+    end)
+    
+    if not ok then
+        log("❌ HTTP FAIL: " .. path)
+        notify("TrustHub Error", "HTTP: " .. path)
+        return nil
     end
+    
+    if not code or #code < 10 then
+        log("❌ ПУСТИЙ КОД: " .. path)
+        return nil
+    end
+    
+    if code:find("404: Not Found") then
+        log("❌ 404: " .. path)
+        notify("TrustHub Error", "404: " .. path)
+        return nil
+    end
+    
+    local fn, err = loadstring(code)
+    if not fn then
+        log("❌ COMPILE FAIL: " .. path .. " → " .. tostring(err))
+        notify("TrustHub Error", "Compile: " .. path)
+        return nil
+    end
+    
+    local ok2, result = pcall(fn)
+    if not ok2 then
+        log("❌ RUN FAIL: " .. path .. " → " .. tostring(result))
+        notify("TrustHub Error", "Run: " .. path)
+        return nil
+    end
+    
+    log("✅ OK: " .. path .. " → " .. type(result))
+    return result
+end
+
+--// ==================================================
+--// ЗАВАНТАЖЕННЯ ВСІХ МОДУЛІВ
+--// ==================================================
+log("=== СТАРТ ===")
+log("loadstring: " .. tostring(loadstring ~= nil))
+log("getsenv: " .. tostring(getsenv ~= nil))
+log("Drawing: " .. tostring(Drawing ~= nil))
+log("gethui: " .. tostring(gethui ~= nil))
+
+local UI = loadModule("ui")
+if not UI then
+    log("❌ UI НЕ ЗАВАНТАЖЕНО — стоп")
+    notify("TrustHub", "UI не завантажено. Перевір консоль.", 10)
+    return
+end
+log("✅ UI OK")
+
+local Features = {
+    SilentAim = loadModule("features.silentaim"),
+    ESP       = loadModule("features.esp"),
+    Speed     = loadModule("features.speed"),
+}
+
+log("SilentAim: " .. type(Features.SilentAim))
+log("ESP: "       .. type(Features.ESP))
+log("Speed: "     .. type(Features.Speed))
+
+--// ==================================================
+--// ЗАПУСК UI
+--// ==================================================
+local ok, err = pcall(function()
+    UI:init(Features)
 end)
 
---// Завантаження UI
-local UI = load("ui")
-if not UI then
-    warn("[TrustHub] Критична помилка: UI не завантажено")
+if not ok then
+    log("❌ UI INIT FAIL: " .. tostring(err))
+    notify("TrustHub Error", "UI init: " .. tostring(err), 15)
     return
 end
 
---// Завантаження фіч
-local Features = {
-    SilentAim = load("features.silentaim"),
-    ESP       = load("features.esp"),
-    Speed     = load("features.speed"),
-}
-
---// Ініціалізація UI з фічами
-UI:init(Features)
-
-print("[TrustHub] v" .. CURRENT_VERSION .. " успішно завантажено ✓")
+log("✅ UI INIT OK")
+log("=== ГОТОВО ===")
+notify("TrustHub", "Завантажено! Перевір консоль для деталей.", 5)

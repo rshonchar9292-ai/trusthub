@@ -323,32 +323,26 @@ function UI:init(Features)
     local FloatIcon = Instance.new("TextLabel")
     FloatIcon.Size = UDim2.new(1, 0, 1, 0)
     FloatIcon.BackgroundTransparency = 1
-    FloatIcon.Text = "⚡"
+    FloatIcon.Text = "T"
     FloatIcon.TextColor3 = Color3.fromRGB(255, 255, 255)
-    FloatIcon.TextSize = 26
+    FloatIcon.TextSize = 24
     FloatIcon.Font = Enum.Font.GothamBold
     FloatIcon.Parent = FloatingBtn
     
-    -- Пульсація іконки
     task.spawn(function()
         while FloatingBtn.Parent do
-            tween(FloatIcon, 1.5, {TextSize = 28}, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+            tween(FloatIcon, 1.5, {TextSize = 26}, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
             task.wait(1.5)
-            tween(FloatIcon, 1.5, {TextSize = 24}, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+            tween(FloatIcon, 1.5, {TextSize = 22}, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
             task.wait(1.5)
         end
     end)
     
-    -- Hover-анімація
     FloatingBtn.MouseEnter:Connect(function()
-        tween(FloatingBtn, 0.2, {
-            Size = UDim2.new(0, 58, 0, 58),
-        }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+        tween(FloatingBtn, 0.2, {Size = UDim2.new(0, 58, 0, 58)}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
     end)
     FloatingBtn.MouseLeave:Connect(function()
-        tween(FloatingBtn, 0.2, {
-            Size = UDim2.new(0, 52, 0, 52),
-        }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        tween(FloatingBtn, 0.2, {Size = UDim2.new(0, 52, 0, 52)}, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
     end)
     
     --// Main Window
@@ -392,7 +386,6 @@ function UI:init(Features)
     HeaderMask.BorderSizePixel = 0
     HeaderMask.Parent = Header
     
-    --// Logo
     local Logo = Instance.new("Frame")
     Logo.Size = UDim2.new(0, 24, 0, 24)
     Logo.Position = UDim2.new(0, 16, 0.5, -12)
@@ -418,7 +411,6 @@ function UI:init(Features)
     LogoText.TextSize = 14
     LogoText.Parent = Logo
     
-    --// Title
     local Title = Instance.new("TextLabel")
     Title.Size = UDim2.new(0, 200, 1, 0)
     Title.Position = UDim2.new(0, 50, 0, 0)
@@ -441,12 +433,11 @@ function UI:init(Features)
     VersionLbl.TextXAlignment = Enum.TextXAlignment.Right
     VersionLbl.Parent = Header
     
-    --// Close Button
     local CloseBtn = Instance.new("TextButton")
     CloseBtn.Size = UDim2.new(0, 26, 0, 26)
     CloseBtn.Position = UDim2.new(1, -36, 0.5, -13)
     CloseBtn.BackgroundColor3 = Theme.Element
-    CloseBtn.Text = "✕"
+    CloseBtn.Text = "X"
     CloseBtn.TextColor3 = Theme.Text
     CloseBtn.Font = Enum.Font.GothamBold
     CloseBtn.TextSize = 12
@@ -595,11 +586,11 @@ function UI:init(Features)
         return Page
     end
     
-    --// Вкладки
-    local AimPage      = createTab("Aimbot", "🎯")
-    local VisualsPage  = createTab("Visuals", "👁")
-    local MovePage     = createTab("Movement", "🏃")
-    local SettingsPage = createTab("Settings", "⚙")
+    --// Вкладки (замінені emoji на букви — щоб не було крапок)
+    local AimPage      = createTab("Aimbot", "A")
+    local VisualsPage  = createTab("Visuals", "V")
+    local MovePage     = createTab("Movement", "M")
+    local SettingsPage = createTab("Settings", "S")
     
     --// Наповнення
     createSection(AimPage, "Silent Aim")
@@ -627,7 +618,7 @@ function UI:init(Features)
     local InfoLbl = Instance.new("TextLabel")
     InfoLbl.Size = UDim2.new(1, -16, 0, 80)
     InfoLbl.BackgroundColor3 = Theme.Element
-    InfoLbl.Text = "TrustHub v1.0.0\n\nF4 — toggle menu\nClick ⚡ — open/close\nDrag ⚡ — move"
+    InfoLbl.Text = "TrustHub v1.0.0\n\nF4 - toggle menu\nClick T - open/close\nDrag T - move"
     InfoLbl.TextColor3 = Theme.TextDim
     InfoLbl.Font = Enum.Font.Gotham
     InfoLbl.TextSize = 12
@@ -646,52 +637,21 @@ function UI:init(Features)
     Tabs["Aimbot"].Emoji.TextColor3 = Theme.Accent
     
     --// ==================================================
-    --// MOUSE CONTROL (FIXED)
+    --// MOUSE CONTROL (FIXED — простий метод)
     --// ==================================================
     local mouseUnlocked = false
-    local savedCameraType = nil
     
     local function unlockMouse()
         if mouseUnlocked then return end
-        savedCameraType = workspace.CurrentCamera.CameraType
-        
-        -- Примусово розблоковуємо
-        UserInputService.MouseBehavior = Enum.MouseBehavior.Default
         UserInputService.MouseIconEnabled = true
-        
-        -- Відкріплюємо камеру від скрипта гри
-        pcall(function()
-            workspace.CurrentCamera.CameraType = Enum.CameraType.Scriptable
-        end)
-        
-        -- Постійно тримаємо мишку розблокованою (деякі ігри форсять LockCenter щокадру)
-        local conn
-        conn = RunService.RenderStepped:Connect(function()
-            if not mouseUnlocked then
-                conn:Disconnect()
-                return
-            end
-            if UserInputService.MouseBehavior ~= Enum.MouseBehavior.Default then
-                UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-            end
-        end)
-        
+        UserInputService.MouseBehavior = Enum.MouseBehavior.Default
         mouseUnlocked = true
     end
     
     local function lockMouse()
         if not mouseUnlocked then return end
-        
-        -- Повертаємо як у MM2
-        UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
         UserInputService.MouseIconEnabled = false
-        
-        if savedCameraType then
-            pcall(function()
-                workspace.CurrentCamera.CameraType = savedCameraType
-            end)
-        end
-        
+        UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
         mouseUnlocked = false
     end
     

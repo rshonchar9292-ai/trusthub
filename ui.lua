@@ -1,6 +1,7 @@
 --// ==================================================
 --// TrustHub - Custom Animated UI Library
 --// Author: rshonchar9292-ai
+--// Version: 2.0 (Fling buttons edition)
 --// ==================================================
 
 local TweenService     = game:GetService("TweenService")
@@ -24,6 +25,8 @@ local Theme = {
     Accent     = Color3.fromRGB(120, 140, 255),
     Success    = Color3.fromRGB(90, 220, 130),
     Danger     = Color3.fromRGB(240, 80, 90),
+    Murderer   = Color3.fromRGB(255, 50, 50),
+    Sheriff    = Color3.fromRGB(50, 150, 255),
     Text       = Color3.fromRGB(235, 235, 245),
     TextDim    = Color3.fromRGB(145, 145, 165),
     Stroke     = Color3.fromRGB(58, 58, 78),
@@ -283,6 +286,49 @@ local function createSection(parent, text)
 end
 
 --// ==================================================
+--// КОМПОНЕНТ: КНОПКА ДІЇ
+--// ==================================================
+local function createActionButton(parent, text, color, callback)
+    local Btn = Instance.new("TextButton")
+    Btn.Size = UDim2.new(1, -16, 0, 40)
+    Btn.BackgroundColor3 = color
+    Btn.Text = text
+    Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Btn.Font = Enum.Font.GothamBold
+    Btn.TextSize = 13
+    Btn.BorderSizePixel = 0
+    Btn.AutoButtonColor = false
+    Btn.Parent = parent
+    corner(Btn, 8)
+    
+    -- Градієнт для краси
+    local grad = Instance.new("UIGradient")
+    grad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, color),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(
+            math.min(255, color.R * 255 + 40),
+            math.min(255, color.G * 255 + 40),
+            math.min(255, color.B * 255 + 40)
+        )),
+    })
+    grad.Rotation = 45
+    grad.Parent = Btn
+    
+    Btn.MouseEnter:Connect(function()
+        tween(Btn, 0.15, {Size = UDim2.new(1, -16, 0, 44)})
+    end)
+    Btn.MouseLeave:Connect(function()
+        tween(Btn, 0.15, {Size = UDim2.new(1, -16, 0, 40)})
+    end)
+    Btn.MouseButton1Click:Connect(function()
+        createRipple(Btn, Mouse.X - Btn.AbsolutePosition.X, Mouse.Y - Btn.AbsolutePosition.Y)
+        callback()
+    end)
+    
+    return Btn
+end
+
+--// ==================================================
 --// ГОЛОВНА ФУНКЦІЯ UI:init
 --// ==================================================
 function UI:init(Features)
@@ -424,7 +470,7 @@ function UI:init(Features)
     VersionLbl.Size = UDim2.new(0, 60, 1, 0)
     VersionLbl.Position = UDim2.new(1, -100, 0, 0)
     VersionLbl.BackgroundTransparency = 1
-    VersionLbl.Text = "v1.0.0"
+    VersionLbl.Text = "v2.0"
     VersionLbl.TextColor3 = Theme.TextDim
     VersionLbl.Font = Enum.Font.Gotham
     VersionLbl.TextSize = 11
@@ -590,39 +636,203 @@ function UI:init(Features)
     local MovePage     = createTab("Movement", "M")
     local SettingsPage = createTab("Settings", "S")
     
-    --// Наповнення
+    --// ==================================================
+    --// НАПОВНЕННЯ: AIMBOT TAB
+    --// ==================================================
+    
+    -- SILENT AIM
     createSection(AimPage, "Silent Aim")
+    
     createToggle(AimPage, "Enable Silent Aim", false, function(v)
         if Features.SilentAim then Features.SilentAim:setEnabled(v) end
     end)
-    createSlider(AimPage, "FOV Radius", 30, 600, 150, function(v)
-        if Features.SilentAim then Features.SilentAim:setFOV(v) end
+    
+    createSlider(AimPage, "Hit Chance %", 1, 100, 100, function(v)
+        if Features.SilentAim and Features.SilentAim.setHitChance then 
+            Features.SilentAim:setHitChance(v) 
+        end
     end)
     
+    -- FLING
+    createSection(AimPage, "💥 Fling")
+    
+    createToggle(AimPage, "Enable Fling", false, function(v)
+        if Features.Fling then Features.Fling:setEnabled(v) end
+    end)
+    
+    createSlider(AimPage, "Fling Range", 5, 100, 20, function(v)
+        if Features.Fling and Features.Fling.setRange then 
+            Features.Fling:setRange(v) 
+        end
+    end)
+    
+    createSlider(AimPage, "Fling Power", 100000, 2000000, 800000, function(v)
+        if Features.Fling and Features.Fling.setPower then 
+            Features.Fling:setPower(v) 
+        end
+    end)
+    
+    createToggle(AimPage, "Only Enemies", true, function(v)
+        if Features.Fling and Features.Fling.setOnlyEnemies then 
+            Features.Fling:setOnlyEnemies(v) 
+        end
+    end)
+    
+    createToggle(AimPage, "Touch Fling", true, function(v)
+        if Features.Fling and Features.Fling.setTouchFling then 
+            Features.Fling:setTouchFling(v) 
+        end
+    end)
+    
+    --// Кнопка FLING ALL NOW
+    createActionButton(AimPage, "💥 FLING ALL NOW", Theme.Danger, function()
+        if Features.Fling and Features.Fling.flingAll then
+            Features.Fling:flingAll()
+        end
+    end)
+    
+    --// Кнопки FLING SHERIFF + FLING MURDER (в ряд)
+    local flingRow = Instance.new("Frame")
+    flingRow.Size = UDim2.new(1, -16, 0, 40)
+    flingRow.BackgroundTransparency = 1
+    flingRow.Parent = AimPage
+    
+    local rowLayout = Instance.new("UIListLayout")
+    rowLayout.FillDirection = Enum.FillDirection.Horizontal
+    rowLayout.Padding = UDim.new(0, 6)
+    rowLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    rowLayout.Parent = flingRow
+    
+    -- Кнопка FLING SHERIFF
+    local sheriffBtn = Instance.new("TextButton")
+    sheriffBtn.Size = UDim2.new(0.5, -3, 1, 0)
+    sheriffBtn.BackgroundColor3 = Theme.Sheriff
+    sheriffBtn.Text = "🔫 FLING SHERIFF"
+    sheriffBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    sheriffBtn.Font = Enum.Font.GothamBold
+    sheriffBtn.TextSize = 11
+    sheriffBtn.BorderSizePixel = 0
+    sheriffBtn.AutoButtonColor = false
+    sheriffBtn.LayoutOrder = 1
+    sheriffBtn.Parent = flingRow
+    corner(sheriffBtn, 8)
+    
+    sheriffBtn.MouseEnter:Connect(function()
+        tween(sheriffBtn, 0.15, {BackgroundColor3 = Color3.fromRGB(90, 180, 255)})
+    end)
+    sheriffBtn.MouseLeave:Connect(function()
+        tween(sheriffBtn, 0.15, {BackgroundColor3 = Theme.Sheriff})
+    end)
+    sheriffBtn.MouseButton1Click:Connect(function()
+        createRipple(sheriffBtn, Mouse.X - sheriffBtn.AbsolutePosition.X,
+                     Mouse.Y - sheriffBtn.AbsolutePosition.Y)
+        if Features.Fling and Features.Fling.flingSheriff then
+            Features.Fling:flingSheriff()
+        end
+    end)
+    
+    -- Кнопка FLING MURDER
+    local murderBtn = Instance.new("TextButton")
+    murderBtn.Size = UDim2.new(0.5, -3, 1, 0)
+    murderBtn.BackgroundColor3 = Theme.Murderer
+    murderBtn.Text = "🔪 FLING MURDER"
+    murderBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    murderBtn.Font = Enum.Font.GothamBold
+    murderBtn.TextSize = 11
+    murderBtn.BorderSizePixel = 0
+    murderBtn.AutoButtonColor = false
+    murderBtn.LayoutOrder = 2
+    murderBtn.Parent = flingRow
+    corner(murderBtn, 8)
+    
+    murderBtn.MouseEnter:Connect(function()
+        tween(murderBtn, 0.15, {BackgroundColor3 = Color3.fromRGB(255, 100, 100)})
+    end)
+    murderBtn.MouseLeave:Connect(function()
+        tween(murderBtn, 0.15, {BackgroundColor3 = Theme.Murderer})
+    end)
+    murderBtn.MouseButton1Click:Connect(function()
+        createRipple(murderBtn, Mouse.X - murderBtn.AbsolutePosition.X,
+                     Mouse.Y - murderBtn.AbsolutePosition.Y)
+        if Features.Fling and Features.Fling.flingMurderer then
+            Features.Fling:flingMurderer()
+        end
+    end)
+    
+    --// Кнопка FLING NEAREST
+    createActionButton(AimPage, "🎯 FLING NEAREST", Theme.Accent, function()
+        if Features.Fling and Features.Fling.flingNearest then
+            Features.Fling:flingNearest()
+        end
+    end)
+    
+    --// ==================================================
+    --// НАПОВНЕННЯ: VISUALS TAB
+    --// ==================================================
     createSection(VisualsPage, "ESP")
+    
     createToggle(VisualsPage, "Enable ESP", false, function(v)
         if Features.ESP then Features.ESP:setEnabled(v) end
     end)
     
+    -- Легенда
+    local legendFrame = Instance.new("Frame")
+    legendFrame.Size = UDim2.new(1, -16, 0, 80)
+    legendFrame.BackgroundColor3 = Theme.Element
+    legendFrame.BorderSizePixel = 0
+    legendFrame.Parent = VisualsPage
+    corner(legendFrame, 8)
+    
+    local legendText = Instance.new("TextLabel")
+    legendText.Size = UDim2.new(1, -20, 1, 0)
+    legendText.Position = UDim2.new(0, 10, 0, 0)
+    legendText.BackgroundTransparency = 1
+    legendText.Text = "🔴 Red = Murderer\n🔵 Blue = Sheriff\n🟢 Green = Innocent"
+    legendText.TextColor3 = Theme.TextDim
+    legendText.Font = Enum.Font.Gotham
+    legendText.TextSize = 12
+    legendText.TextXAlignment = Enum.TextXAlignment.Left
+    legendText.TextYAlignment = Enum.TextYAlignment.Center
+    legendText.Parent = legendFrame
+    
+    --// ==================================================
+    --// НАПОВНЕННЯ: MOVEMENT TAB
+    --// ==================================================
     createSection(MovePage, "Speed")
+    
     createToggle(MovePage, "Enable Speed", false, function(v)
         if Features.Speed then Features.Speed:setEnabled(v) end
     end)
+    
     createSlider(MovePage, "Speed Value", 16, 200, 32, function(v)
-        if Features.Speed then Features.Speed:setValue(v) end
+        if Features.Speed and Features.Speed.setValue then 
+            Features.Speed:setValue(v) 
+        end
     end)
     
+    --// ==================================================
+    --// НАПОВНЕННЯ: SETTINGS TAB
+    --// ==================================================
     createSection(SettingsPage, "Info")
-    local InfoLbl = Instance.new("TextLabel")
-    InfoLbl.Size = UDim2.new(1, -16, 0, 80)
-    InfoLbl.BackgroundColor3 = Theme.Element
-    InfoLbl.Text = "TrustHub v1.0.0\n\nF4 - toggle menu\nClick T - open/close\nDrag T - move"
-    InfoLbl.TextColor3 = Theme.TextDim
-    InfoLbl.Font = Enum.Font.Gotham
-    InfoLbl.TextSize = 12
-    InfoLbl.TextWrapped = true
-    InfoLbl.Parent = SettingsPage
-    corner(InfoLbl, 8)
+    
+    local infoFrame = Instance.new("Frame")
+    infoFrame.Size = UDim2.new(1, -16, 0, 120)
+    infoFrame.BackgroundColor3 = Theme.Element
+    infoFrame.BorderSizePixel = 0
+    infoFrame.Parent = SettingsPage
+    corner(infoFrame, 8)
+    
+    local infoText = Instance.new("TextLabel")
+    infoText.Size = UDim2.new(1, -20, 1, 0)
+    infoText.Position = UDim2.new(0, 10, 0, 0)
+    infoText.BackgroundTransparency = 1
+    infoText.Text = "TrustHub v2.0\n\nF4 — toggle menu\nClick T — open/close\nDrag T — move\nC — toggle Silent Aim\nE — toggle Fling"
+    infoText.TextColor3 = Theme.TextDim
+    infoText.Font = Enum.Font.Gotham
+    infoText.TextSize = 12
+    infoText.TextXAlignment = Enum.TextXAlignment.Left
+    infoText.TextYAlignment = Enum.TextYAlignment.Top
+    infoText.Parent = infoFrame
     
     --// Активуємо першу вкладку
     Tabs["Aimbot"].Page.Visible = true
@@ -635,8 +845,7 @@ function UI:init(Features)
     Tabs["Aimbot"].Emoji.TextColor3 = Theme.Accent
     
     --// ==================================================
-    --// MOUSE CONTROL — DISABLED
-    --// UI НЕ ЧІПАЄ МИШКУ ВЗАГАЛІ
+    --// MOUSE — НЕ ЧІПАЄМО (як ти просив)
     --// ==================================================
     local function unlockMouse() end
     local function lockMouse() end
@@ -650,10 +859,9 @@ function UI:init(Features)
     local function openPanel()
         if isOpen or opening then return end
         opening = true
-        unlockMouse()
         Main.Visible = true
         Main.Size = UDim2.new(0, 0, 0, 0)
-        tween(Main, 0.35, {Size = UDim2.new(0, 580, 0, 420)}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+        tween(Main, 0.35, {Size = UDim2.new(0, 580, 0, 460)}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
         tween(FloatingBtn, 0.25, {BackgroundTransparency = 0.6})
         task.delay(0.35, function() isOpen = true; opening = false end)
     end
@@ -664,19 +872,16 @@ function UI:init(Features)
         local t = tween(Main, 0.2, {Size = UDim2.new(0, 0, 0, 0)}, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
         t.Completed:Connect(function()
             Main.Visible = false
-            lockMouse()
         end)
         tween(FloatingBtn, 0.25, {BackgroundTransparency = 0})
     end
     
-    --// Клік на плаваючу кнопку
     FloatingBtn.MouseButton1Click:Connect(function()
         if isOpen then closePanel() else openPanel() end
     end)
     
     CloseBtn.MouseButton1Click:Connect(closePanel)
     
-    --// F4 toggle
     UserInputService.InputBegan:Connect(function(input, gpe)
         if gpe then return end
         if input.KeyCode == Enum.KeyCode.F4 then

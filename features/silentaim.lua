@@ -1,105 +1,49 @@
---// ╔══════════════════════════════════════════════════════════════════╗
---// ║  TrustHub Silent Aim PRO v3.0                                    ║
---// ║  Best-in-class MM2 Silent Aim — Dual Hook + Prediction + Stats   ║
---// ║  Author: rshonchar9292-ai                                        ║
---// ╚══════════════════════════════════════════════════════════════════╝
---//
---//  Features:
---//  [+] Dual hook: getsenv + hookmetamethod fallback
---//  [+] Smart target selection (role-aware, priority-based)
---//  [+] Prediction for moving targets
---//  [+] Auto-shoot when target in crosshair zone
---//  [+] Trigger bot
---//  [+] Statistics tracking (kills, shots, accuracy)
---//  [+] Target visualization (dot, line, box)
---//  [+] Auto re-hook on weapon change
---//  [+] Detailed console logging
---//  [+] Bypass-friendly
+--// ============================================================
+--// TrustHub Silent Aim — WALLBANG Edition
+--// Стріляє крізь стіни. Замінює origin + hit position.
 --// ============================================================
 
-local Players           = game:GetService("Players")
-local RunService        = game:GetService("RunService")
-local UserInputService  = game:GetService("UserInputService")
-local StarterGui        = game:GetService("StarterGui")
+local Players          = game:GetService("Players")
+local RunService       = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local StarterGui       = game:GetService("StarterGui")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera      = workspace.CurrentCamera
-local Mouse       = LocalPlayer:GetMouse()
 
---// ============================================================
---//  CONFIG
---// ============================================================
 local Config = {
-    Enabled         = false,
-    AimPart         = "Head",
-    HitChance       = 100,
-    MaxDistance     = 5000,
-    TargetMode      = "Auto",       -- Auto | Murderer | All
-    Priority        = "Cursor",     -- Cursor | Distance | Health | Threat
-    PredictMovement = true,
-    PredictionTime  = 0.15,
-    WallBang        = true,
-    VisibleCheck    = false,
-    IgnoreDead      = true,
-    IgnoreTeam      = true,
-    AutoShoot       = false,
-    AutoShootDelay  = 0.05,
-    TriggerBot      = false,
-    TriggerRadius   = 30,
-    ShowTargetDot   = true,
-    ShowTargetLine  = true,
-    ShowTargetBox   = true,
-    TargetColor     = Color3.fromRGB(255, 60, 60),
-    LineColor       = Color3.fromRGB(120, 140, 255),
-    ToggleKey       = Enum.KeyCode.C,
-    SilentLogs      = false,
+    Enabled       = false,
+    AimPart       = "Head",
+    HitChance     = 100,
+    TargetMode    = "Auto",     -- Auto | Murderer | All
+    WallBang      = true,       -- стріляти крізь стіни
+    ReplaceOrigin = true,       -- підміняти точку початку пострілу
+    ToggleKey     = Enum.KeyCode.C,
 }
 
---// ============================================================
---//  STATS
---// ============================================================
-local Stats = {
-    Shots           = 0,
-    Kills           = 0,
-    Hits            = 0,
-    SessionStart    = tick(),
-    LastTarget      = nil,
-    LastTargetTime  = 0,
-}
-
---// ============================================================
---//  LOG
---// ============================================================
-local Log = {}
-function Log.info(msg)  print("[SilentAim] " .. msg) end
-function Log.ok(msg)    print("[SilentAim] ✓ " .. msg) end
-function Log.warn(msg)  warn("[SilentAim] ⚠ " .. msg) end
-function Log.err(msg)   warn("[SilentAim] ✗ " .. msg) end
-function Log.debug(msg) if not Config.SilentLogs then return end print("[SilentAim][D] " .. msg) end
+local Stats = { Shots = 0, Hooks = 0 }
 
 local function notify(title, text, duration)
     pcall(function()
         StarterGui:SetCore("SendNotification", {
-            Title = title,
-            Text = text,
-            Duration = duration or 3,
+            Title = title, Text = text, Duration = duration or 2,
         })
     end)
 end
+
+local function log(msg) print("[SilentAim] " .. msg) end
 
 --// ============================================================
 --//  ROLE DETECTION
 --// ============================================================
 local function getRole(player)
-    if not player then return "Dead" end
+    if not player or not player.Character then return "Dead" end
     local char = player.Character
-    if not char then return "Dead" end
 
     for _, tool in ipairs(char:GetChildren()) do
         if tool:IsA("Tool") then
             local n = tool.Name:lower()
-            if n:find("knife") or n:find("blade") or n:find("murder")
-               or n:find("dagger") or n:find("sword") then
+            if n:find("knife") or n:find("blade") or n:find("murder") then
                 return "Murderer"
             end
         end
@@ -108,8 +52,7 @@ local function getRole(player)
     for _, tool in ipairs(char:GetChildren()) do
         if tool:IsA("Tool") then
             local n = tool.Name:lower()
-            if n:find("gun") or n:find("pistol") or n:find("sheriff")
-               or n:find("revolver") or n:find("magnum") then
+            if n:find("gun") or n:find("pistol") or n:find("sheriff") or n:find("revolver") then
                 return "Sheriff"
             end
         end
@@ -135,9 +78,6 @@ end
 
 local function getMyRole() return getRole(LocalPlayer) end
 
---// ============================================================
---//  VALIDATION
---// ============================================================
 local function isAlive(plr)
     local char = plr.Character
     if not char then return false end
@@ -145,217 +85,110 @@ local function isAlive(plr)
     return hum and hum.Health > 0
 end
 
-local function isFriendly(plr)
-    if plr == LocalPlayer then return true end
-    if not Config.IgnoreTeam then return false end
-
-    local myRole = getMyRole()
-    local theirRole = getRole(plr)
-
-    if myRole == "Murderer" then return false end
-    if myRole == "Sheriff" or myRole == "Innocent" then
-        if theirRole ~= "Murderer" then return true end
-    end
-    return false
-end
-
 local function isValidTarget(plr)
     if plr == LocalPlayer then return false end
-    if Config.IgnoreDead and not isAlive(plr) then return false end
+    if not isAlive(plr) then return false end
 
     if Config.TargetMode == "Auto" then
-        if isFriendly(plr) then return false end
+        local myRole = getMyRole()
+        local theirRole = getRole(plr)
+        if myRole == "Murderer" then
+            return theirRole ~= "Murderer"
+        end
+        return theirRole == "Murderer"
     elseif Config.TargetMode == "Murderer" then
-        if getRole(plr) ~= "Murderer" then return false end
+        return getRole(plr) == "Murderer"
     end
-
     return true
 end
 
 --// ============================================================
---//  PREDICTION
---// ============================================================
-local function predictPosition(part, ping)
-    if not Config.PredictMovement then return part.Position end
-    local velocity = part.AssemblyLinearVelocity
-    if velocity.Magnitude < 1 then return part.Position end
-    local time = math.clamp(Config.PredictionTime + (ping or 0), 0, 0.5)
-    return part.Position + velocity * time
-end
-
-local function getPing()
-    local ok, ping = pcall(function()
-        return game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue() / 1000
-    end)
-    return ok and ping or 0.05
-end
-
---// ============================================================
---//  SCORING
---// ============================================================
-local function scoreTarget(plr, part, myPos, mousePos)
-    local dist = (myPos - part.Position).Magnitude
-    if dist > Config.MaxDistance then return nil end
-
-    local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
-
-    if Config.VisibleCheck then
-        local ray = Ray.new(Camera.CFrame.Position,
-            (part.Position - Camera.CFrame.Position).Unit * dist)
-        local hit = workspace:FindPartOnRayWithIgnoreList(ray,
-            {LocalPlayer.Character, Camera})
-        if hit and not hit:IsDescendantOf(plr.Character) then return nil end
-    end
-
-    if Config.Priority == "Distance" then
-        return dist
-    elseif Config.Priority == "Health" then
-        local hum = plr.Character:FindFirstChildOfClass("Humanoid")
-        return hum and hum.Health or 100
-    elseif Config.Priority == "Threat" then
-        local role = getRole(plr)
-        local base = dist
-        if role == "Murderer" then base = base * 0.3 end
-        if role == "Sheriff" then base = base * 1.5 end
-        return base
-    else
-        if onScreen then
-            return (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
-        else
-            return 100000 + dist
-        end
-    end
-end
-
---// ============================================================
---//  FIND BEST TARGET
+--//  FIND BEST TARGET (без wall check — wallbang!)
 --// ============================================================
 local function findBestTarget()
     local myChar = LocalPlayer.Character
-    if not myChar then return nil, nil, nil end
+    if not myChar then return nil end
     local myRoot = myChar:FindFirstChild("HumanoidRootPart")
-    if not myRoot then return nil, nil, nil end
+    if not myRoot then return nil end
 
     local mousePos = UserInputService:GetMouseLocation()
-    local bestPart, bestPlr = nil, nil
-    local bestScore = math.huge
+    local best, bestScore = nil, math.huge
 
     for _, plr in ipairs(Players:GetPlayers()) do
         if not isValidTarget(plr) then continue end
+
         local char = plr.Character
-        local part = char:FindFirstChild(Config.AimPart)
+        local part = char:FindFirstChild(Config.AimPart) 
                   or char:FindFirstChild("Head")
                   or char:FindFirstChild("HumanoidRootPart")
         if not part then continue end
 
-        local score = scoreTarget(plr, part, myRoot.Position, mousePos)
-        if score and score < bestScore then
+        local dist = (myRoot.Position - part.Position).Magnitude
+        if dist > 5000 then continue end
+
+        -- НЕ перевіряємо стіни — wallbang!
+        
+        local sp, onScreen = Camera:WorldToViewportPoint(part.Position)
+        local score
+        if onScreen then
+            score = (Vector2.new(sp.X, sp.Y) - mousePos).Magnitude
+        else
+            -- За екраном — але все одно можемо цілитись
+            score = 100000 + dist
+        end
+
+        if score < bestScore then
             bestScore = score
-            bestPart = part
-            bestPlr = plr
+            best = part
         end
     end
 
-    return bestPart, bestPlr, bestScore
+    return best
 end
 
 --// ============================================================
---//  VISUALIZATION
+--//  WALLBANG ARGUMENT REPLACER
 --// ============================================================
-local targetLine = Drawing.new("Line")
-targetLine.Thickness = 1.5
-targetLine.Transparency = 0.7
-targetLine.Visible = false
+local function replaceAimArgs(args, target, myRoot)
+    if not target then return args end
 
-local targetDot = Drawing.new("Circle")
-targetDot.NumSides = 30
-targetDot.Radius = 4
-targetDot.Filled = true
-targetDot.Transparency = 0.9
-targetDot.Visible = false
+    local targetPos = target.Position + Vector3.new(0, 0.1, 0)
 
-local targetBox = Drawing.new("Square")
-targetBox.Thickness = 1.5
-targetBox.Filled = false
-targetBox.Transparency = 0.85
-targetBox.Visible = false
-
-local currentTarget = nil
-
---// ============================================================
---//  HOOK 1: getsenv
---// ============================================================
-local hookedScripts = {}
-local hookSuccess = false
-
-local function hookViaGetsenv()
-    local char = LocalPlayer.Character
-    if not char then return false end
-
-    local tool = char:FindFirstChildWhichIsA("Tool")
-    if not tool then return false end
-
-    local gunScript = nil
-    for _, child in ipairs(tool:GetDescendants()) do
-        if child:IsA("LocalScript") and child.Name == "GunScript_Local" then
-            gunScript = child
-            break
-        end
-    end
-
-    if not gunScript then
-        for _, child in ipairs(tool:GetDescendants()) do
-            if child:IsA("LocalScript") and child.Name:lower():find("gun") then
-                gunScript = child
-                break
-            end
-        end
-    end
-
-    if not gunScript then return false end
-    if hookedScripts[gunScript] then return true end
-
-    local ok, env = pcall(getsenv, gunScript)
-    if not ok or not env or not env.Fire then return false end
-
-    local oldFire = env.Fire
-    env.Fire = function(...)
-        local args = {...}
-
-        if Config.Enabled then
-            if math.random(1, 100) <= Config.HitChance then
-                local target = findBestTarget()
-                if target then
-                    local ping = getPing()
-                    local aimPos = predictPosition(target, ping)
-                    for i, arg in ipairs(args) do
-                        if typeof(arg) == "Vector3" then
-                            args[i] = aimPos
-                        end
-                    end
-                    Stats.Shots = Stats.Shots + 1
-                    currentTarget = target
+    for i, arg in ipairs(args) do
+        if typeof(arg) == "Vector3" then
+            -- Замінюємо ВСІ Vector3
+            -- Якщо WallBang — підміняємо на позицію цілі
+            args[i] = targetPos
+            
+        elseif typeof(arg) == "CFrame" then
+            -- CFrame — теж підміняємо позицію, зберігаючи обертання
+            local rot = arg - arg.Position
+            args[i] = CFrame.new(targetPos) * rot
+            
+        elseif typeof(arg) == "table" then
+            -- Вкладена таблиця (деякі ігри так передають)
+            for k, v in pairs(arg) do
+                if typeof(v) == "Vector3" then
+                    arg[k] = targetPos
                 end
             end
         end
-
-        return oldFire(unpack(args))
     end
 
-    hookedScripts[gunScript] = true
-    hookSuccess = true
-    Log.ok("GunScript hooked via getsenv")
-    return true
+    return args
 end
 
 --// ============================================================
---//  HOOK 2: hookmetamethod (fallback)
+--//  HOOK — __namecall
 --// ============================================================
 local mtHooked = false
 
-local function hookViaMetamethod()
+local function hookMetamethod()
     if mtHooked then return true end
-    if not hookmetamethod or not getnamecallmethod then return false end
+    if not hookmetamethod or not getnamecallmethod then
+        log("hookmetamethod недоступний")
+        return false
+    end
 
     local ok = pcall(function()
         local oldNamecall
@@ -370,26 +203,32 @@ local function hookViaMetamethod()
                 if tool then
                     local isWeaponRemote = false
                     local parent = self.Parent
-                    while parent do
-                        if parent == tool then
+                    local depth = 0
+                    while parent and depth < 5 do
+                        if parent == tool or parent == char then
                             isWeaponRemote = true
                             break
                         end
                         parent = parent.Parent
+                        depth = depth + 1
+                    end
+
+                    -- Fallback: будь-який RemoteEvent з Vector3 в аргументах
+                    if not isWeaponRemote and self:IsA("RemoteEvent") then
+                        for _, arg in ipairs(args) do
+                            if typeof(arg) == "Vector3" then
+                                isWeaponRemote = true
+                                break
+                            end
+                        end
                     end
 
                     if isWeaponRemote then
                         if math.random(1, 100) <= Config.HitChance then
                             local target = findBestTarget()
                             if target then
-                                local aimPos = predictPosition(target, getPing())
-                                for i, arg in ipairs(args) do
-                                    if typeof(arg) == "Vector3" then
-                                        args[i] = aimPos
-                                    end
-                                end
+                                args = replaceAimArgs(args, target)
                                 Stats.Shots = Stats.Shots + 1
-                                currentTarget = target
                             end
                         end
                     end
@@ -400,129 +239,91 @@ local function hookViaMetamethod()
         end))
 
         mtHooked = true
-        Log.ok("Metamethod hooked (fallback)")
+        log("✓ hookmetamethod активовано")
     end)
 
     return ok
 end
 
 --// ============================================================
---//  UNIFIED HOOK
+--//  HOOK — getsenv
 --// ============================================================
-local function tryHook()
-    local ok1 = pcall(hookViaGetsenv)
-    if ok1 then return true end
+local hookedTools = {}
 
-    local ok2 = pcall(hookViaMetamethod)
-    return ok2
-end
+local function hookGetsenv()
+    local char = LocalPlayer.Character
+    if not char then return false end
+    local tool = char:FindFirstChildWhichIsA("Tool")
+    if not tool then return false end
 
---// ============================================================
---//  AUTO-SHOOT / TRIGGER BOT
---// ============================================================
-local lastShoot = 0
-
-RunService.Heartbeat:Connect(function()
-    if not Config.Enabled then return end
-
-    if Config.AutoShoot then
-        if tick() - lastShoot < Config.AutoShootDelay then return end
-        local target = findBestTarget()
-        if target then
-            lastShoot = tick()
-            local tool = LocalPlayer.Character
-                      and LocalPlayer.Character:FindFirstChildWhichIsA("Tool")
-            if tool then
-                pcall(function()
-                    LocalPlayer:GetMouse():Click()
-                end)
-            end
+    local scripts = {}
+    for _, child in ipairs(tool:GetDescendants()) do
+        if child:IsA("LocalScript") then
+            table.insert(scripts, child)
         end
     end
 
-    if Config.TriggerBot then
-        local target = findBestTarget()
-        if target then
-            local screenPos, onScreen = Camera:WorldToViewportPoint(target.Position)
-            if onScreen then
-                local mousePos = UserInputService:GetMouseLocation()
-                local d = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
-                if d <= Config.TriggerRadius then
-                    if tick() - lastShoot > 0.15 then
-                        lastShoot = tick()
-                        pcall(function()
-                            if mouse1click then mouse1click() end
-                        end)
+    if #scripts == 0 then return false end
+
+    local anyHooked = false
+
+    for _, gunScript in ipairs(scripts) do
+        if hookedTools[gunScript] then continue end
+
+        local ok, env = pcall(getsenv, gunScript)
+        if not ok or not env then continue end
+
+        for funcName, funcValue in pairs(env) do
+            if type(funcValue) == "function" then
+                local lower = tostring(funcName):lower()
+                if lower == "fire" or lower == "shoot" or lower == "hit" 
+                   or lower:find("fire") or lower:find("shoot") then
+                    
+                    local oldFunc = env[funcName]
+                    env[funcName] = function(...)
+                        local args = {...}
+                        if Config.Enabled then
+                            if math.random(1, 100) <= Config.HitChance then
+                                local target = findBestTarget()
+                                if target then
+                                    args = replaceAimArgs(args, target)
+                                end
+                            end
+                        end
+                        return oldFunc(unpack(args))
                     end
+                    
+                    hookedTools[gunScript] = true
+                    anyHooked = true
+                    log("✓ getsenv хук: " .. gunScript.Name .. "." .. funcName)
+                    break
                 end
             end
         end
     end
+
+    return anyHooked
+end
+
+--// ============================================================
+--//  UNIFIED
+--// ============================================================
+local function tryAllHooks()
+    hookMetamethod()
+    hookGetsenv()
+end
+
+task.spawn(function()
+    while task.wait(2) do
+        if Config.Enabled then
+            pcall(tryAllHooks)
+        end
+    end
 end)
 
---// ============================================================
---//  RENDER LOOP (visualization + auto-hook)
---// ============================================================
-local reconnectTimer = 0
-
-RunService.RenderStepped:Connect(function(dt)
-    reconnectTimer = reconnectTimer + dt
-    if reconnectTimer > 2 then
-        reconnectTimer = 0
-        if Config.Enabled then tryHook() end
-    end
-
-    if not Config.Enabled then
-        targetLine.Visible = false
-        targetDot.Visible = false
-        targetBox.Visible = false
-        return
-    end
-
-    local target = findBestTarget()
-    currentTarget = target
-
-    if target then
-        local screenPos, onScreen = Camera:WorldToViewportPoint(target.Position)
-
-        if onScreen then
-            if Config.ShowTargetDot then
-                targetDot.Visible = true
-                targetDot.Position = Vector2.new(screenPos.X, screenPos.Y)
-                targetDot.Color = Config.TargetColor
-            else
-                targetDot.Visible = false
-            end
-
-            if Config.ShowTargetLine then
-                local vp = Camera.ViewportSize
-                targetLine.Visible = true
-                targetLine.From = Vector2.new(vp.X / 2, vp.Y)
-                targetLine.To = Vector2.new(screenPos.X, screenPos.Y)
-                targetLine.Color = Config.LineColor
-            else
-                targetLine.Visible = false
-            end
-
-            if Config.ShowTargetBox then
-                local size = math.clamp(2000 / (Camera.CFrame.Position - target.Position).Magnitude, 20, 200)
-                targetBox.Visible = true
-                targetBox.Size = Vector2.new(size * 0.5, size)
-                targetBox.Position = Vector2.new(screenPos.X - size * 0.25, screenPos.Y - size * 0.5)
-                targetBox.Color = Config.TargetColor
-            else
-                targetBox.Visible = false
-            end
-        else
-            targetLine.Visible = false
-            targetDot.Visible = false
-            targetBox.Visible = false
-        end
-    else
-        targetLine.Visible = false
-        targetDot.Visible = false
-        targetBox.Visible = false
-    end
+LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(1.5)
+    if Config.Enabled then tryAllHooks() end
 end)
 
 --// ============================================================
@@ -533,12 +334,12 @@ UserInputService.InputBegan:Connect(function(input, gpe)
     if input.KeyCode == Config.ToggleKey then
         Config.Enabled = not Config.Enabled
         if Config.Enabled then
-            tryHook()
-            notify("💀 Silent Aim", "ON", 2)
-            Log.info("Enabled")
+            tryAllHooks()
+            notify("💀 Silent Aim (WallBang)", "ON", 2)
+            log("ON")
         else
             notify("💀 Silent Aim", "OFF", 2)
-            Log.info("Disabled")
+            log("OFF")
         end
     end
 end)
@@ -551,60 +352,27 @@ SilentAim.__index = SilentAim
 
 function SilentAim.new()
     local self = setmetatable({}, SilentAim)
-
-    LocalPlayer.CharacterAdded:Connect(function()
-        task.wait(1.5)
-        tryHook()
-    end)
-
     task.wait(0.5)
-    tryHook()
-
+    tryAllHooks()
     return self
 end
 
---// API for UI
 function SilentAim:setEnabled(state)
     Config.Enabled = state
-    if state then
-        tryHook()
-        Log.info("Enabled (via UI)")
-    else
-        Log.info("Disabled (via UI)")
-    end
+    if state then tryAllHooks() end
+    log("setEnabled: " .. tostring(state))
 end
 
-function SilentAim:setFOV(value) end
-function SilentAim:setAimPart(part) Config.AimPart = part end
 function SilentAim:setHitChance(v) Config.HitChance = v end
+function SilentAim:setFOV(v) end
+function SilentAim:setAimPart(v) Config.AimPart = v end
 function SilentAim:setWallBang(v) Config.WallBang = v end
-function SilentAim:setTargetMode(mode) Config.TargetMode = mode end
-function SilentAim:setPriority(p) Config.Priority = p end
-function SilentAim:setPredict(v) Config.PredictMovement = v end
-function SilentAim:setAutoShoot(v) Config.AutoShoot = v end
-function SilentAim:setTriggerBot(v) Config.TriggerBot = v end
+function SilentAim:setTargetMode(v) Config.TargetMode = v end
+function SilentAim:getStats() return Stats end
 
-function SilentAim:getStats()
-    local accuracy = 0
-    if Stats.Shots > 0 then
-        accuracy = math.floor((Stats.Kills / Stats.Shots) * 100)
-    end
-    return {
-        Shots = Stats.Shots,
-        Kills = Stats.Kills,
-        Accuracy = accuracy,
-        Uptime = math.floor(tick() - Stats.SessionStart),
-    }
-end
-
---// ============================================================
---//  STARTUP
---// ============================================================
-Log.info("═══════════════════════════════════")
-Log.info("TrustHub Silent Aim PRO v3.0")
-Log.info("Toggle: C key")
-Log.info("═══════════════════════════════════")
-
-notify("💀 Silent Aim PRO", "Loaded. Press C to toggle.", 5)
+log("═══════════════════════════════")
+log("Silent Aim WALLBANG loaded")
+log("Toggle: C key")
+log("═══════════════════════════════")
 
 return SilentAim.new()

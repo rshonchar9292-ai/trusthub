@@ -21,48 +21,47 @@ local function notify(title, text, duration)
 end
 
 --// ==================================================
---// ЗАВАНТАЖЕННЯ МОДУЛЯ
+--// ЗАВАНТАЖЕННЯ МОДУЛЯ (крапки → слеші)
 --// ==================================================
 local function loadModule(path)
-    local url = BASE_URL .. path .. ".lua"
-    log("Завантажую: " .. path)
+    -- 🔥 ГОЛОВНИЙ ФІКС
+    local urlPath = path:gsub("%.", "/")
+    local url = BASE_URL .. urlPath .. ".lua"
+    
+    log("Завантажую: " .. urlPath)
     
     local ok, code = pcall(function()
         return game:HttpGet(url)
     end)
     
     if not ok then
-        log("❌ HTTP FAIL: " .. path)
-        notify("TrustHub Error", "HTTP: " .. path)
+        log("❌ HTTP FAIL: " .. urlPath)
         return nil
     end
     
     if not code or #code < 10 then
-        log("❌ ПУСТИЙ КОД: " .. path)
+        log("❌ ПУСТИЙ КОД: " .. urlPath)
         return nil
     end
     
     if code:find("404: Not Found") then
-        log("❌ 404: " .. path)
-        notify("TrustHub Error", "404: " .. path)
+        log("❌ 404: " .. urlPath)
         return nil
     end
     
     local fn, err = loadstring(code)
     if not fn then
-        log("❌ COMPILE FAIL: " .. path .. " → " .. tostring(err))
-        notify("TrustHub Error", "Compile: " .. path)
+        log("❌ COMPILE FAIL: " .. urlPath .. " → " .. tostring(err))
         return nil
     end
     
     local ok2, result = pcall(fn)
     if not ok2 then
-        log("❌ RUN FAIL: " .. path .. " → " .. tostring(result))
-        notify("TrustHub Error", "Run: " .. path)
+        log("❌ RUN FAIL: " .. urlPath .. " → " .. tostring(result))
         return nil
     end
     
-    log("✅ OK: " .. path .. " → " .. type(result))
+    log("✅ OK: " .. urlPath .. " → " .. type(result))
     return result
 end
 
@@ -70,15 +69,10 @@ end
 --// ЗАВАНТАЖЕННЯ ВСІХ МОДУЛІВ
 --// ==================================================
 log("=== СТАРТ ===")
-log("loadstring: " .. tostring(loadstring ~= nil))
-log("getsenv: " .. tostring(getsenv ~= nil))
-log("Drawing: " .. tostring(Drawing ~= nil))
-log("gethui: " .. tostring(gethui ~= nil))
 
 local UI = loadModule("ui")
 if not UI then
     log("❌ UI НЕ ЗАВАНТАЖЕНО — стоп")
-    notify("TrustHub", "UI не завантажено. Перевір консоль.", 10)
     return
 end
 log("✅ UI OK")
@@ -108,4 +102,4 @@ end
 
 log("✅ UI INIT OK")
 log("=== ГОТОВО ===")
-notify("TrustHub", "Завантажено! Перевір консоль для деталей.", 5)
+notify("TrustHub", "Завантажено успішно!", 5)

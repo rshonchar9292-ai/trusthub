@@ -1,5 +1,5 @@
 --// ==================================================
---// TrustHub UI v7.0 — 6 tabs, R15 animations only
+--// TrustHub UI v8.0 — 6 tabs + AutoFarm
 --// ==================================================
 
 local TweenService     = game:GetService("TweenService")
@@ -255,12 +255,8 @@ local function createActionButton(parent, text, color, callback)
     grad.Rotation = 45
     grad.Parent = Btn
 
-    Btn.MouseEnter:Connect(function()
-        tween(Btn, 0.15, {Size = UDim2.new(1, -16, 0, 50)})
-    end)
-    Btn.MouseLeave:Connect(function()
-        tween(Btn, 0.15, {Size = UDim2.new(1, -16, 0, 46)})
-    end)
+    Btn.MouseEnter:Connect(function() tween(Btn, 0.15, {Size = UDim2.new(1, -16, 0, 50)}) end)
+    Btn.MouseLeave:Connect(function() tween(Btn, 0.15, {Size = UDim2.new(1, -16, 0, 46)}) end)
     Btn.MouseButton1Click:Connect(function()
         createRipple(Btn, Mouse.X - Btn.AbsolutePosition.X, Mouse.Y - Btn.AbsolutePosition.Y)
         callback()
@@ -298,15 +294,9 @@ local function createPlayerRow(parent, plr, role, roleColor, callback)
 
     task.spawn(function()
         local ok, thumb = pcall(function()
-            return Players:GetUserThumbnailAsync(
-                plr.UserId,
-                Enum.ThumbnailType.HeadShot,
-                Enum.ThumbnailSize.Size100x100
-            )
+            return Players:GetUserThumbnailAsync(plr.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
         end)
-        if ok and thumb and avatar.Parent then
-            avatar.Image = thumb
-        end
+        if ok and thumb and avatar.Parent then avatar.Image = thumb end
     end)
 
     local nameLbl = Instance.new("TextLabel")
@@ -475,7 +465,7 @@ function UI:init(Features)
     VersionLbl.Size = UDim2.new(0, 60, 1, 0)
     VersionLbl.Position = UDim2.new(1, -100, 0, 0)
     VersionLbl.BackgroundTransparency = 1
-    VersionLbl.Text = "v7.0"
+    VersionLbl.Text = "v8.0"
     VersionLbl.TextColor3 = Theme.TextDim
     VersionLbl.Font = Enum.Font.Gotham
     VersionLbl.TextSize = 11
@@ -748,30 +738,57 @@ function UI:init(Features)
     --// ==================================================
     --// MOVEMENT TAB
     --// ==================================================
+
+    -- NOCLIP
     createSection(MovePage, "Noclip")
 
     createToggle(MovePage, "Enable Noclip", false, function(v)
         if Features.Noclip then Features.Noclip:setEnabled(v) end
     end)
 
+    -- AUTO GUN
     createSection(MovePage, "Auto Gun")
 
     createToggle(MovePage, "Auto Pickup Gun", false, function(v)
         if Features.AutoGun then Features.AutoGun:setEnabled(v) end
     end)
 
-    local autogunInfo = Instance.new("TextLabel")
-    autogunInfo.Size = UDim2.new(1, -16, 0, 40)
-    autogunInfo.BackgroundTransparency = 1
-    autogunInfo.Text = "Auto-teleports to any gun on the map\nand picks it up instantly."
-    autogunInfo.TextColor3 = Theme.TextDim
-    autogunInfo.Font = Enum.Font.Gotham
-    autogunInfo.TextSize = 11
-    autogunInfo.TextXAlignment = Enum.TextXAlignment.Left
-    autogunInfo.TextYAlignment = Enum.TextYAlignment.Top
-    autogunInfo.TextWrapped = true
-    autogunInfo.Parent = MovePage
+    -- AUTO FARM
+    createSection(MovePage, "💰 Auto Farm")
 
+    createToggle(MovePage, "Enable Auto Farm", false, function(v)
+        if Features.AutoFarm then Features.AutoFarm:setEnabled(v) end
+    end)
+
+    createSlider(MovePage, "Farm Speed", 20, 200, 60, function(v)
+        if Features.AutoFarm and Features.AutoFarm.setFlySpeed then 
+            Features.AutoFarm:setFlySpeed(v) 
+        end
+    end)
+
+    createSlider(MovePage, "Farm Range", 50, 2000, 500, function(v)
+        if Features.AutoFarm and Features.AutoFarm.setMaxDistance then 
+            Features.AutoFarm:setMaxDistance(v) 
+        end
+    end)
+
+    createToggle(MovePage, "Escape from Murderer", true, function(v)
+        if Features.AutoFarm and Features.AutoFarm.setAntiMurderer then 
+            Features.AutoFarm:setAntiMurderer(v) 
+        end
+    end)
+
+    local farmInfo = Instance.new("TextLabel")
+    farmInfo.Size = UDim2.new(1, -16, 0, 30)
+    farmInfo.BackgroundTransparency = 1
+    farmInfo.Text = "Flies through walls to collect coins"
+    farmInfo.TextColor3 = Theme.TextDim
+    farmInfo.Font = Enum.Font.Gotham
+    farmInfo.TextSize = 11
+    farmInfo.TextXAlignment = Enum.TextXAlignment.Left
+    farmInfo.Parent = MovePage
+
+    -- SPEED
     createSection(MovePage, "Speed")
 
     createToggle(MovePage, "Enable Speed", false, function(v)
@@ -789,7 +806,6 @@ function UI:init(Features)
     --// ==================================================
     createSection(AnimationPage, "R15 Animation Sets")
 
-    -- Info label
     local animInfoFrame = Instance.new("Frame")
     animInfoFrame.Size = UDim2.new(1, -16, 0, 40)
     animInfoFrame.BackgroundColor3 = Theme.Element
@@ -809,7 +825,6 @@ function UI:init(Features)
     animInfoText.TextYAlignment = Enum.TextYAlignment.Center
     animInfoText.Parent = animInfoFrame
 
-    -- Animations list container
     local animListFrame = Instance.new("Frame")
     animListFrame.Size = UDim2.new(1, -16, 0, 400)
     animListFrame.BackgroundColor3 = Theme.Element
@@ -833,7 +848,6 @@ function UI:init(Features)
     animListLayout.SortOrder = Enum.SortOrder.LayoutOrder
     animListLayout.Parent = animScroll
 
-    -- Store button references for highlighting active
     local animButtons = {}
     local activeAnimName = nil
 
@@ -850,7 +864,6 @@ function UI:init(Features)
         activeAnimName = name
     end
 
-    -- Populate animations list
     if Features.Animation and Features.Animation.getAnimationList then
         local list = Features.Animation:getAnimationList()
         for _, name in ipairs(list) do
@@ -888,13 +901,11 @@ function UI:init(Features)
         end
     end
 
-    -- Reset button
     createSection(AnimationPage, "Controls")
 
     createActionButton(AnimationPage, "RESET ANIMATIONS", Theme.Danger, function()
         if Features.Animation then
             Features.Animation:reset()
-            -- Clear highlight
             for _, btn in pairs(animButtons) do
                 tween(btn, 0.2, {BackgroundColor3 = Theme.Element})
                 btn.TextColor3 = Theme.Text
@@ -909,7 +920,7 @@ function UI:init(Features)
     createSection(SettingsPage, "Info")
 
     local infoFrame = Instance.new("Frame")
-    infoFrame.Size = UDim2.new(1, -16, 0, 160)
+    infoFrame.Size = UDim2.new(1, -16, 0, 180)
     infoFrame.BackgroundColor3 = Theme.Element
     infoFrame.BorderSizePixel = 0
     infoFrame.Parent = SettingsPage
@@ -919,7 +930,7 @@ function UI:init(Features)
     infoText.Size = UDim2.new(1, -20, 1, 0)
     infoText.Position = UDim2.new(0, 10, 0, 0)
     infoText.BackgroundTransparency = 1
-    infoText.Text = "TrustHub v7.0\n\nF4  — toggle menu\nT   — open/close\nC   — toggle Silent Aim\n\nTabs:\nAimbot | Fling | Visuals | Movement | Animation | Settings"
+    infoText.Text = "TrustHub v8.0\n\nF4  — toggle menu\nT   — open/close\nC   — toggle Silent Aim\n\nTabs:\nAimbot | Fling | Visuals | Movement | Animation | Settings"
     infoText.TextColor3 = Theme.TextDim
     infoText.Font = Enum.Font.Gotham
     infoText.TextSize = 12
@@ -946,7 +957,7 @@ function UI:init(Features)
         opening = true
         Main.Visible = true
         Main.Size = UDim2.new(0, 0, 0, 0)
-        tween(Main, 0.35, {Size = UDim2.new(0, 580, 0, 500)}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+        tween(Main, 0.35, {Size = UDim2.new(0, 580, 0, 520)}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
         tween(FloatingBtn, 0.25, {BackgroundTransparency = 0.6})
         task.delay(0.35, function() isOpen = true; opening = false end)
     end

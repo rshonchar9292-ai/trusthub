@@ -1,11 +1,13 @@
---// TrustHub - Loader v2
---// Author: rshonchar9292-ai
+--// ╔══════════════════════════════════════════════════════════╗
+--// ║  TrustHub - Loader v4.0                                  ║
+--// ║  Author: rshonchar9292-ai                                ║
+--// ╚══════════════════════════════════════════════════════════╝
 
 local BASE_URL = "https://raw.githubusercontent.com/rshonchar9292-ai/trusthub/main/"
 
---// ==================================================
---// ДІАГНОСТИКА
---// ==================================================
+--// ============================================================
+--//  LOG HELPERS
+--// ============================================================
 local function log(msg)
     print("[TrustHub] " .. tostring(msg))
 end
@@ -20,11 +22,10 @@ local function notify(title, text, duration)
     end)
 end
 
---// ==================================================
---// ЗАВАНТАЖЕННЯ МОДУЛЯ (крапки → слеші)
---// ==================================================
+--// ============================================================
+--//  MODULE LOADER (крапки → слеші)
+--// ============================================================
 local function loadModule(path)
-    -- 🔥 ГОЛОВНИЙ ФІКС
     local urlPath = path:gsub("%.", "/")
     local url = BASE_URL .. urlPath .. ".lua"
     
@@ -65,31 +66,46 @@ local function loadModule(path)
     return result
 end
 
---// ==================================================
---// ЗАВАНТАЖЕННЯ ВСІХ МОДУЛІВ
---// ==================================================
+--// ============================================================
+--//  LOAD UI
+--// ============================================================
 log("=== СТАРТ ===")
 
 local UI = loadModule("ui")
 if not UI then
     log("❌ UI НЕ ЗАВАНТАЖЕНО — стоп")
+    notify("TrustHub", "UI не завантажено. Перевір консоль.", 10)
     return
 end
 log("✅ UI OK")
 
+--// ============================================================
+--//  LOAD ALL FEATURES
+--// ============================================================
 local Features = {
     SilentAim = loadModule("features.silentaim"),
     ESP       = loadModule("features.esp"),
     Speed     = loadModule("features.speed"),
+    Fling     = loadModule("features.fling"),
+    AutoGun   = loadModule("features.autogun"),
+    Noclip    = loadModule("features.noclip"),
+    Animation = loadModule("features.animation"),
 }
 
-log("SilentAim: " .. type(Features.SilentAim))
-log("ESP: "       .. type(Features.ESP))
-log("Speed: "     .. type(Features.Speed))
+log("SilentAim: "  .. type(Features.SilentAim))
+log("ESP: "        .. type(Features.ESP))
+log("Speed: "      .. type(Features.Speed))
+log("Fling: "      .. type(Features.Fling))
+log("AutoGun: "    .. type(Features.AutoGun))
+log("Noclip: "     .. type(Features.Noclip))
+log("Animation: "  .. type(Features.Animation))
 
---// ==================================================
---// ЗАПУСК UI
---// ==================================================
+-- Make Features global for debugging
+_G.TrustHubFeatures = Features
+
+--// ============================================================
+--//  INIT UI
+--// ============================================================
 local ok, err = pcall(function()
     UI:init(Features)
 end)
@@ -102,4 +118,4 @@ end
 
 log("✅ UI INIT OK")
 log("=== ГОТОВО ===")
-notify("TrustHub", "Завантажено успішно!", 5)
+notify("TrustHub v4.0", "Завантажено! F4 — меню", 5)

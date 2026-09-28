@@ -6,7 +6,6 @@
 local TweenService     = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local Players          = game:GetService("Players")
-local RunService       = game:GetService("RunService")
 
 local LocalPlayer = Players.LocalPlayer
 local Mouse       = LocalPlayer:GetMouse()
@@ -23,7 +22,6 @@ local Theme = {
     Element    = Color3.fromRGB(40, 40, 52),
     ElementHov = Color3.fromRGB(50, 50, 64),
     Accent     = Color3.fromRGB(120, 140, 255),
-    AccentDark = Color3.fromRGB(80, 100, 220),
     Success    = Color3.fromRGB(90, 220, 130),
     Danger     = Color3.fromRGB(240, 80, 90),
     Text       = Color3.fromRGB(235, 235, 245),
@@ -486,7 +484,7 @@ function UI:init(Features)
     local Tabs = {}
     local ActiveTab = nil
     
-    local function createTab(name, emoji)
+    local function createTab(name, letter)
         local Btn = Instance.new("TextButton")
         Btn.Size = UDim2.new(1, 0, 0, 38)
         Btn.BackgroundColor3 = Theme.Panel
@@ -509,7 +507,7 @@ function UI:init(Features)
         Emoji.Size = UDim2.new(0, 24, 1, 0)
         Emoji.Position = UDim2.new(0, 12, 0, 0)
         Emoji.BackgroundTransparency = 1
-        Emoji.Text = emoji
+        Emoji.Text = letter
         Emoji.TextColor3 = Theme.Text
         Emoji.TextSize = 15
         Emoji.TextXAlignment = Enum.TextXAlignment.Left
@@ -586,7 +584,7 @@ function UI:init(Features)
         return Page
     end
     
-    --// Вкладки (замінені emoji на букви — щоб не було крапок)
+    --// Вкладки
     local AimPage      = createTab("Aimbot", "A")
     local VisualsPage  = createTab("Visuals", "V")
     local MovePage     = createTab("Movement", "M")
@@ -637,23 +635,11 @@ function UI:init(Features)
     Tabs["Aimbot"].Emoji.TextColor3 = Theme.Accent
     
     --// ==================================================
-    --// MOUSE CONTROL (FIXED — простий метод)
+    --// MOUSE CONTROL — DISABLED
+    --// UI НЕ ЧІПАЄ МИШКУ ВЗАГАЛІ
     --// ==================================================
-    local mouseUnlocked = false
-    
-    local function unlockMouse()
-        if mouseUnlocked then return end
-        UserInputService.MouseIconEnabled = true
-        UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-        mouseUnlocked = true
-    end
-    
-    local function lockMouse()
-        if not mouseUnlocked then return end
-        UserInputService.MouseIconEnabled = false
-        UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
-        mouseUnlocked = false
-    end
+    local function unlockMouse() end
+    local function lockMouse() end
     
     --// ==================================================
     --// OPEN / CLOSE

@@ -297,7 +297,7 @@ function UI:init(Features)
     ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
     
     --// ==================================================
-    --// ПЛАВАЮЧА КНОПКА (іконка)
+    --// ПЛАВАЮЧА КНОПКА
     --// ==================================================
     local FloatingBtn = Instance.new("TextButton")
     FloatingBtn.Name = "FloatingButton"
@@ -307,11 +307,10 @@ function UI:init(Features)
     FloatingBtn.Text = ""
     FloatingBtn.BorderSizePixel = 0
     FloatingBtn.AutoButtonColor = false
-    FloatingBtn.Draggable = false
     FloatingBtn.Parent = ScreenGui
     corner(FloatingBtn, 999)
     
-    local FloatStroke = stroke(FloatingBtn, Color3.fromRGB(255, 255, 255), 2, 0.6)
+    stroke(FloatingBtn, Color3.fromRGB(255, 255, 255), 2, 0.6)
     
     local FloatGrad = Instance.new("UIGradient")
     FloatGrad.Color = ColorSequence.new({
@@ -344,13 +343,11 @@ function UI:init(Features)
     FloatingBtn.MouseEnter:Connect(function()
         tween(FloatingBtn, 0.2, {
             Size = UDim2.new(0, 58, 0, 58),
-            Position = FloatingBtn.Position - UDim2.new(0, 3, 0, 3),
         }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
     end)
     FloatingBtn.MouseLeave:Connect(function()
         tween(FloatingBtn, 0.2, {
             Size = UDim2.new(0, 52, 0, 52),
-            Position = FloatingBtn.Position + UDim2.new(0, 3, 0, 3),
         }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
     end)
     
@@ -368,7 +365,7 @@ function UI:init(Features)
     Main.Parent = ScreenGui
     corner(Main, 14)
     
-    local MainStroke = stroke(Main, Theme.Stroke, 1.5, 0.3)
+    stroke(Main, Theme.Stroke, 1.5, 0.3)
     
     local MainGrad = Instance.new("UIGradient")
     MainGrad.Color = ColorSequence.new({
@@ -604,7 +601,7 @@ function UI:init(Features)
     local MovePage     = createTab("Movement", "🏃")
     local SettingsPage = createTab("Settings", "⚙")
     
-    --// NAPOVNENNYA
+    --// Наповнення
     createSection(AimPage, "Silent Aim")
     createToggle(AimPage, "Enable Silent Aim", false, function(v)
         if Features.SilentAim then Features.SilentAim:setEnabled(v) end
@@ -628,9 +625,9 @@ function UI:init(Features)
     
     createSection(SettingsPage, "Info")
     local InfoLbl = Instance.new("TextLabel")
-    InfoLbl.Size = UDim2.new(1, -16, 0, 60)
+    InfoLbl.Size = UDim2.new(1, -16, 0, 80)
     InfoLbl.BackgroundColor3 = Theme.Element
-    InfoLbl.Text = "TrustHub v1.0.0\n\nF4 — toggle menu\nClick ⚡ — open/close\nDrag ⚡ — move anywhere"
+    InfoLbl.Text = "TrustHub v1.0.0\n\nF4 — toggle menu\nClick ⚡ — open/close\nDrag ⚡ — move"
     InfoLbl.TextColor3 = Theme.TextDim
     InfoLbl.Font = Enum.Font.Gotham
     InfoLbl.TextSize = 12
@@ -648,30 +645,59 @@ function UI:init(Features)
     Tabs["Aimbot"].Label.TextColor3 = Theme.Accent
     Tabs["Aimbot"].Emoji.TextColor3 = Theme.Accent
     
-    --// MOUSE CONTROL
-    local savedMouseBehavior, savedMouseIcon, savedCameraType
+    --// ==================================================
+    --// MOUSE CONTROL (FIXED)
+    --// ==================================================
     local mouseUnlocked = false
+    local savedCameraType = nil
     
     local function unlockMouse()
         if mouseUnlocked then return end
-        savedMouseBehavior = UserInputService.MouseBehavior
-        savedMouseIcon = UserInputService.MouseIconEnabled
         savedCameraType = workspace.CurrentCamera.CameraType
+        
+        -- Примусово розблоковуємо
         UserInputService.MouseBehavior = Enum.MouseBehavior.Default
         UserInputService.MouseIconEnabled = true
-        pcall(function() workspace.CurrentCamera.CameraType = Enum.CameraType.Scriptable end)
+        
+        -- Відкріплюємо камеру від скрипта гри
+        pcall(function()
+            workspace.CurrentCamera.CameraType = Enum.CameraType.Scriptable
+        end)
+        
+        -- Постійно тримаємо мишку розблокованою (деякі ігри форсять LockCenter щокадру)
+        local conn
+        conn = RunService.RenderStepped:Connect(function()
+            if not mouseUnlocked then
+                conn:Disconnect()
+                return
+            end
+            if UserInputService.MouseBehavior ~= Enum.MouseBehavior.Default then
+                UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+            end
+        end)
+        
         mouseUnlocked = true
     end
     
     local function lockMouse()
         if not mouseUnlocked then return end
-        if savedMouseBehavior then UserInputService.MouseBehavior = savedMouseBehavior end
-        if savedMouseIcon ~= nil then UserInputService.MouseIconEnabled = savedMouseIcon end
-        if savedCameraType then pcall(function() workspace.CurrentCamera.CameraType = savedCameraType end) end
+        
+        -- Повертаємо як у MM2
+        UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+        UserInputService.MouseIconEnabled = false
+        
+        if savedCameraType then
+            pcall(function()
+                workspace.CurrentCamera.CameraType = savedCameraType
+            end)
+        end
+        
         mouseUnlocked = false
     end
     
+    --// ==================================================
     --// OPEN / CLOSE
+    --// ==================================================
     local isOpen = false
     local opening = false
     
@@ -682,11 +708,7 @@ function UI:init(Features)
         Main.Visible = true
         Main.Size = UDim2.new(0, 0, 0, 0)
         tween(Main, 0.35, {Size = UDim2.new(0, 580, 0, 420)}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-        -- ховаємо кнопку коли меню відкрите
-        tween(FloatingBtn, 0.25, {
-            Position = UDim2.new(0, 30, 0.5, -26),
-            BackgroundTransparency = 0.6,
-        })
+        tween(FloatingBtn, 0.25, {BackgroundTransparency = 0.6})
         task.delay(0.35, function() isOpen = true; opening = false end)
     end
     
@@ -701,13 +723,14 @@ function UI:init(Features)
         tween(FloatingBtn, 0.25, {BackgroundTransparency = 0})
     end
     
-    --// Floating button click — toggle
+    --// Клік на плаваючу кнопку
     FloatingBtn.MouseButton1Click:Connect(function()
         if isOpen then closePanel() else openPanel() end
     end)
     
     CloseBtn.MouseButton1Click:Connect(closePanel)
     
+    --// F4 toggle
     UserInputService.InputBegan:Connect(function(input, gpe)
         if gpe then return end
         if input.KeyCode == Enum.KeyCode.F4 then
@@ -715,7 +738,7 @@ function UI:init(Features)
         end
     end)
     
-    --// DRAG Floating button
+    --// Drag Floating button
     local draggingFloat, dragFloatStart, floatStartPos
     FloatingBtn.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -739,7 +762,7 @@ function UI:init(Features)
         end
     end)
     
-    --// DRAG Main window
+    --// Drag Main window
     local dragging, dragStart, startPos
     Header.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then

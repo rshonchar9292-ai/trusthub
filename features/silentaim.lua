@@ -1,20 +1,18 @@
 --// ╔══════════════════════════════════════════════════════════════╗
---// ║  TrustHub Silent Aim — Auto Active                           ║
---// ║  Always ON. No toggles. Dual hook.                           ║
+--// ║  TrustHub Silent Aim — ShootGun Edition                      ║
+--// ║  Pistol only • Always ON • Prediction • No binds             ║
 --// ╚══════════════════════════════════════════════════════════════╝
 
 local Players          = game:GetService("Players")
 local RunService       = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
 local StarterGui       = game:GetService("StarterGui")
 
 local LocalPlayer = Players.LocalPlayer
-local Camera      = workspace.CurrentCamera
 
 --// ============================================================
 --//  STATE
 --// ============================================================
-local ACTIVE = true        -- завжди активний
+local ACTIVE = true
 local hooked = false
 local oldNamecall = nil
 
@@ -41,8 +39,7 @@ local function getRole(player)
     for _, tool in ipairs(char:GetChildren()) do
         if tool:IsA("Tool") then
             local n = tool.Name:lower()
-            if n:find("knife") or n:find("blade") or n:find("murder") 
-               or n:find("dagger") or n:find("sword") then
+            if n:find("knife") or n:find("blade") or n:find("murder") then
                 return "Murderer"
             end
         end
@@ -51,8 +48,7 @@ local function getRole(player)
     for _, tool in ipairs(char:GetChildren()) do
         if tool:IsA("Tool") then
             local n = tool.Name:lower()
-            if n:find("gun") or n:find("pistol") or n:find("sheriff") 
-               or n:find("revolver") or n:find("magnum") then
+            if n:find("gun") or n:find("pistol") or n:find("sheriff") then
                 return "Sheriff"
             end
         end
@@ -76,77 +72,39 @@ local function getRole(player)
     return "Innocent"
 end
 
-local function getMyRole() return getRole(LocalPlayer) end
-
-local function isAlive(plr)
-    local char = plr.Character
-    if not char then return false end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    return hum and hum.Health > 0
-end
-
---// ============================================================
---//  TARGET VALIDATION
---// ============================================================
-local function isValidTarget(plr)
-    if plr == LocalPlayer then return false end
-    if not isAlive(plr) then return false end
-
-    local myRole = getMyRole()
-    local theirRole = getRole(plr)
-
-    -- Як Murderer — стріляю в усіх, хто не Murderer
-    if myRole == "Murderer" then
-        return theirRole ~= "Murderer"
-    end
-
-    -- Інакше — тільки в Murderer-а
-    return theirRole == "Murderer"
-end
-
---// ============================================================
---//  FIND BEST TARGET
---// ============================================================
-local function findBestTarget()
-    local myChar = LocalPlayer.Character
-    if not myChar then return nil end
-    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
-    if not myRoot then return nil end
-
-    local mousePos = UserInputService:GetMouseLocation()
-    local best, bestScore = nil, math.huge
-
+local function findMurderer()
     for _, plr in ipairs(Players:GetPlayers()) do
-        if not isValidTarget(plr) then continue end
-
-        local char = plr.Character
-        local part = char:FindFirstChild("Head")
-                  or char:FindFirstChild("HumanoidRootPart")
-        if not part then continue end
-
-        local sp, onScreen = Camera:WorldToViewportPoint(part.Position)
-        local score
-        if onScreen then
-            score = (Vector2.new(sp.X, sp.Y) - mousePos).Magnitude
-        else
-            -- За екраном — wallbang (низький приоритет)
-            local dist = (myRoot.Position - part.Position).Magnitude
-            score = 100000 + dist
-        end
-
-        if score < bestScore then
-            bestScore = score
-            best = part
+        if plr == LocalPlayer then continue end
+        if not plr.Character then continue end
+        local hum = plr.Character:FindFirstChildOfClass("Humanoid")
+        if not hum or hum.Health <= 0 then continue end
+        if getRole(plr) == "Murderer" then
+            return plr
         end
     end
-
-    return best
+    return nil
 end
 
 --// ============================================================
---//  HOOK __namecall (головний метод)
+--//  PREDICTION (з оригіналу)
 --// ============================================================
-local function hookNamecall()
+local function getPredictedPosition(primaryPart)
+    -- Prediction = Velocity / 40
+    local velocity = primaryPart.AssemblyLinearVelocity
+    local prediction = velocity / 40
+
+    -- Якщо ціль стрибає (Y velocity > 10) — не стріляти
+    if math.abs(velocity.Y) >= 10 then
+        return nil
+    end
+
+    return primaryPart.Position + prediction
+end
+
+--// ============================================================
+--//  HOOK
+--// ============================================================
+local function hook()
     if hooked then return true end
     if not hookmetamethod or not getnamecallmethod then
         log("❌ hookmetamethod недоступний")
@@ -154,139 +112,60 @@ local function hookNamecall()
     end
 
     local success = pcall(function()
-        oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
-            local method = getnamecallmethod()
-            local args = {...}
+        oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(Object, ...)
+            local NamecallMethod = getnamecallmethod()
+            local Arguments = {...}
 
-            if method == "FireServer" and ACTIVE then
-                local char = LocalPlayer.Character
-                local tool = char and char:FindFirstChildWhichIsA("Tool")
-
-                if tool then
-                    -- Чи це remote зброї?
-                    local isWeaponRemote = false
-                    local parent = self.Parent
-                    local depth = 0
-                    while parent and depth < 5 do
-                        if parent == tool or parent == char then
-                            isWeaponRemote = true
-                            break
-                        end
-                        parent = parent.Parent
-                        depth = depth + 1
-                    end
-
-                    if isWeaponRemote then
-                        -- Знаходимо ціль
-                        local target = findBestTarget()
-                        if target then
-                            local targetPos = target.Position + Vector3.new(0, 0.1, 0)
-                            
-                            -- Замінюємо Vector3 / CFrame
-                            for i, arg in ipairs(args) do
-                                if typeof(arg) == "Vector3" then
-                                    args[i] = targetPos
-                                elseif typeof(arg) == "CFrame" then
-                                    local rot = arg - arg.Position
-                                    args[i] = CFrame.new(targetPos) * rot
-                                end
+            if ACTIVE and not checkcaller() then
+                -- Silent Aim для пістолета
+                if NamecallMethod == "InvokeServer" and tostring(Object) == "ShootGun" then
+                    local murderer = findMurderer()
+                    if murderer and murderer.Character then
+                        local primaryPart = murderer.Character.PrimaryPart
+                        if primaryPart then
+                            local predictedPos = getPredictedPosition(primaryPart)
+                            if predictedPos then
+                                Arguments[2] = predictedPos
+                            else
+                                -- Ціль стрибає — не стріляти
+                                return nil
                             end
                         end
                     end
                 end
             end
 
-            -- ⚠ ГОЛОВНЕ: повертаємо результат oldNamecall
-            return oldNamecall(self, unpack(args))
+            return oldNamecall(Object, unpack(Arguments))
         end))
 
         hooked = true
-        log("✓ hookmetamethod активовано")
+        log("✓ hookmetamethod активовано (ShootGun)")
     end)
 
     return success
 end
 
 --// ============================================================
---//  HOOK getsenv (додатковий метод)
---// ============================================================
-local hookedScripts = {}
-
-local function hookGetsenv()
-    if not getsenv then return false end
-    local char = LocalPlayer.Character
-    if not char then return false end
-    local tool = char:FindFirstChildWhichIsA("Tool")
-    if not tool then return false end
-
-    local anyHooked = false
-
-    for _, gunScript in ipairs(tool:GetDescendants()) do
-        if not gunScript:IsA("LocalScript") then continue end
-        if hookedScripts[gunScript] then continue end
-
-        local ok, env = pcall(getsenv, gunScript)
-        if not ok or not env then continue end
-
-        for funcName, funcValue in pairs(env) do
-            if type(funcValue) == "function" then
-                local lower = tostring(funcName):lower()
-                if lower == "fire" or lower == "shoot" or lower == "hit" then
-                    local oldFunc = env[funcName]
-                    env[funcName] = function(...)
-                        local args = {...}
-                        if ACTIVE then
-                            local target = findBestTarget()
-                            if target then
-                                local targetPos = target.Position + Vector3.new(0, 0.1, 0)
-                                for i, arg in ipairs(args) do
-                                    if typeof(arg) == "Vector3" then
-                                        args[i] = targetPos
-                                    end
-                                end
-                            end
-                        end
-                        return oldFunc(unpack(args))
-                    end
-                    hookedScripts[gunScript] = true
-                    anyHooked = true
-                    log("✓ getsenv хук: " .. gunScript.Name .. "." .. funcName)
-                    break
-                end
-            end
-        end
-    end
-
-    return anyHooked
-end
-
---// ============================================================
 --//  AUTO RE-HOOK
 --// ============================================================
-local function tryAllHooks()
-    hookNamecall()
-    hookGetsenv()
-end
-
--- Перший хук
 task.wait(0.5)
-tryAllHooks()
+hook()
 
--- При зміні персонажа
 LocalPlayer.CharacterAdded:Connect(function()
     task.wait(1.5)
-    tryAllHooks()
+    if ACTIVE and not hooked then hook() end
 end)
 
--- Кожні 2 секунди (якщо зброя змінилась)
 task.spawn(function()
-    while task.wait(2) do
-        tryAllHooks()
+    while task.wait(3) do
+        if ACTIVE and not hooked then
+            pcall(hook)
+        end
     end
 end)
 
 --// ============================================================
---//  MODULE (API stubs для UI сумісності)
+--//  MODULE (stubs для UI)
 --// ============================================================
 local SilentAim = {}
 SilentAim.__index = SilentAim
@@ -295,20 +174,20 @@ function SilentAim.new()
     return setmetatable({}, SilentAim)
 end
 
--- Нічого не роблять — просто stubs
 function SilentAim:setEnabled() end
 function SilentAim:setHitChance() end
 function SilentAim:setFOV() end
 function SilentAim:setAimPart() end
 function SilentAim:setWallBang() end
 function SilentAim:setTargetMode() end
-function SilentAim:getStats() return { Active = true } end
+
+function SilentAim:getStats()
+    return { Active = ACTIVE }
+end
 
 log("═══════════════════════════════")
-log("Silent Aim loaded — ALWAYS ON")
-log("No toggles needed")
+log("Silent Aim ShootGun loaded")
+log("Pistol only • Always ON")
 log("═══════════════════════════════")
-
-notify("💀 Silent Aim", "Active (no toggle needed)", 4)
 
 return SilentAim.new()

@@ -1,61 +1,72 @@
 --// ╔══════════════════════════════════════════════════════════════╗
---// ║  TrustHub Auto Farm v2.0                                     ║
---// ║  Auto round start + Noclip flight + Auto Fling Murderer      ║
+--// ║  TrustHub Auto Farm v5.0 — Fixed Speed Edition                ║
+--// ║  Speed: 22 (safe, no kick)                                    ║
 --// ╚══════════════════════════════════════════════════════════════╝
 
-local Players          = game:GetService("Players")
-local RunService       = game:GetService("RunService")
-local StarterGui       = game:GetService("StarterGui")
+local Players    = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local StarterGui = game:GetService("StarterGui")
 
 local LocalPlayer = Players.LocalPlayer
-local Camera      = workspace.CurrentCamera
 
 --// ============================================================
---//  CONFIG
+--//  FIXED CONFIG (без слайдерів)
 --// ============================================================
-local Config = {
-    Enabled       = false,      -- Master toggle
-    AutoStart     = true,       -- Автоматично включати на початку раунду
-    FlySpeed      = 22,         -- Швидкість польоту (studs/s)
-    MaxDistance   = 2000,       -- Максимальна дистанція пошуку
-    UpdateRate    = 0.05,       -- Як часто оновлювати ціль
-    AutoFlingAfterFarm = true,  -- Флингати Murderer-а після збору
-    FlingDelay    = 1.5,        -- Затримка перед флингом
-    AntiMurderer  = true,       -- Тікати від Murderer-а під час фарму
-    DangerRange   = 40,         -- Радіус втечі
-}
+local FLY_SPEED      = 22       -- Фіксована швидкість (безпечна)
+local UPDATE_RATE    = 0.05
+local AUTO_FLING     = true     -- Флинг Murderer-а після фарму
+local FLING_DELAY    = 1.0
+local ANTI_MURDERER  = true
+local DANGER_RANGE   = 35
+local LOG_ENABLED    = true
+local NOTIFY_ENABLED = true
 
 --// ============================================================
 --//  STATE
 --// ============================================================
 local enabled = false
-local flying = false
-local noclipEnabled = false
 local currentTarget = nil
-local lastUpdate = 0
-local collectedCoins = {}   -- монети, які вже зібрали
-local totalCoinsFound = 0
+local lastTargetUpdate = 0
+local collectedCoins = {}
+local totalCoinsCollected = 0
 local roundStartTime = 0
 local flingInProgress = false
 
---// Velocity-based fly
-local bodyVelocity = nil
-local bodyGyro = nil
-
---// Noclip
 local noclipConn = nil
+local mainLoopConn = nil
+local deathCheckConn = nil
 
 --// ============================================================
---//  LOG
+--//  LOG / NOTIFY
 --// ============================================================
-local function log(msg) print("[AutoFarm] " .. msg) end
+local function log(msg)
+    if LOG_ENABLED then
+        print("[AutoFarm] " .. msg)
+    end
+end
 
 local function notify(title, text, duration)
+    if not NOTIFY_ENABLED then return end
     pcall(function()
         StarterGui:SetCore("SendNotification", {
-            Title = title, Text = text, Duration = duration or 2,
+            Title = title,
+            Text = text,
+            Duration = duration or 2,
         })
     end)
+end
+
+--// ============================================================
+--//  HELPERS
+--// ============================================================
+local function getChar()
+    local char = LocalPlayer.Character
+    if not char then return nil end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hum or not hrp then return nil end
+    if hum.Health <= 0 then return nil end
+    return char, hum, hrp
 end
 
 --// ============================================================
@@ -68,7 +79,8 @@ local function getRole(player)
     for _, tool in ipairs(char:GetChildren()) do
         if tool:IsA("Tool") then
             local n = tool.Name:lower()
-            if n:find("knife") or n:find("blade") or n:find("murder") then
+            if n:find("knife") or n:find("blade") or n:find("murder") 
+               or n:find("dagger") or n:find("sword") then
                 return "Murderer"
             end
         end
@@ -77,7 +89,7 @@ local function getRole(player)
     for _, tool in ipairs(char:GetChildren()) do
         if tool:IsA("Tool") then
             local n = tool.Name:lower()
-            if n:find("gun") or n:find("pistol") or n:find("sheriff") or n:find("revolver") then
+            if n:find("gun") or n:find("pistol") or n:find("sheriff") then
                 return "Sheriff"
             end
         end
@@ -107,7 +119,6 @@ local function findMurderer()
         if not plr.Character then continue end
         local hum = plr.Character:FindFirstChildOfClass("Humanoid")
         if not hum or hum.Health <= 0 then continue end
-
         if getRole(plr) == "Murderer" then
             return plr
         end
@@ -116,179 +127,122 @@ local function findMurderer()
 end
 
 --// ============================================================
+--//  COIN DETECTION
+--// ============================================================
+local COIN_WORDS = { 
+    "coin", "money", "token", "cash", 
+    "gem", "gold", "collect", "pickup", "reward" 
+}
+
+local function isCoin(obj)
+    if not obj or not obj.Parent then return false end
+    if not (obj:IsA("BasePart") or obj:IsA("Model")) then return false end
+    local n = obj.Name:lower()
+    for _, w in ipairs(COIN_WORDS) do
+        if n:find(w) then return true end
+    end
+    return false
+end
+
+local function getCoinPosition(coin)
+    if not coin or not coin.Parent then return nil end
+    if coin:IsA("BasePart") then return coin.Position end
+    if coin:IsA("Model") then
+        local p = coin.PrimaryPart or coin:FindFirstChildWhichIsA("BasePart")
+        return p and p.Position or nil
+    end
+    return nil
+end
+
+local function countAllCoins()
+    local count = 0
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if isCoin(obj) then count = count + 1 end
+    end
+    return count
+end
+
+local function findNearestCoin()
+    local char, hum, hrp = getChar()
+    if not hrp then return nil end
+    local best, bestDist = nil, math.huge
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if isCoin(obj) and not collectedCoins[obj] then
+            local pos = getCoinPosition(obj)
+            if pos then
+                local d = (hrp.Position - pos).Magnitude
+                if d < bestDist then
+                    bestDist = d
+                    best = obj
+                end
+            end
+        end
+    end
+    return best
+end
+
+--// ============================================================
 --//  NOCLIP
 --// ============================================================
 local function enableNoclip()
-    if noclipConn then return end
-    noclipEnabled = true
+    if noclipConn then noclipConn:Disconnect() end
     noclipConn = RunService.Stepped:Connect(function()
-        if not noclipEnabled then return end
+        if not enabled then return end
         local char = LocalPlayer.Character
         if not char then return end
-        for _, part in ipairs(char:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.CanCollide = false
+        for _, p in ipairs(char:GetDescendants()) do
+            if p:IsA("BasePart") then
+                p.CanCollide = false
             end
         end
     end)
 end
 
 local function disableNoclip()
-    noclipEnabled = false
     if noclipConn then noclipConn:Disconnect(); noclipConn = nil end
     local char = LocalPlayer.Character
     if char then
-        for _, part in ipairs(char:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.CanCollide = true
+        for _, p in ipairs(char:GetDescendants()) do
+            if p:IsA("BasePart") then
+                p.CanCollide = true
             end
         end
     end
-end
-
---// ============================================================
---//  FLY SETUP (velocity based)
---// ============================================================
-local function setupFly()
-    local char = LocalPlayer.Character
-    if not char then return false end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return false end
-
-    -- Cleanup old
-    if bodyVelocity then bodyVelocity:Destroy(); bodyVelocity = nil end
-    if bodyGyro then bodyGyro:Destroy(); bodyGyro = nil end
-
-    bodyVelocity = Instance.new("BodyVelocity")
-    bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-    bodyVelocity.Velocity = Vector3.zero
-    bodyVelocity.P = 10000
-    bodyVelocity.Parent = hrp
-
-    bodyGyro = Instance.new("BodyGyro")
-    bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-    bodyGyro.P = 10000
-    bodyGyro.CFrame = hrp.CFrame
-    bodyGyro.Parent = hrp
-
-    flying = true
-    return true
-end
-
-local function stopFly()
-    flying = false
-    if bodyVelocity then bodyVelocity:Destroy(); bodyVelocity = nil end
-    if bodyGyro then bodyGyro:Destroy(); bodyGyro = nil end
-end
-
---// ============================================================
---//  COIN DETECTION
---// ============================================================
-local COIN_KEYWORDS = { "coin", "money", "token", "cash" }
-
-local function isCoin(obj)
-    if not obj or not obj.Parent then return false end
-    if not (obj:IsA("BasePart") or obj:IsA("Model")) then return false end
-    local n = obj.Name:lower()
-    for _, kw in ipairs(COIN_KEYWORDS) do
-        if n:find(kw) then return true end
-    end
-    return false
-end
-
-local function getCoinPosition(coin)
-    if coin:IsA("BasePart") then return coin.Position end
-    if coin:IsA("Model") then
-        local primary = coin.PrimaryPart or coin:FindFirstChildWhichIsA("BasePart")
-        if primary then return primary.Position end
-    end
-    return nil
-end
-
---// ============================================================
---//  FIND NEAREST COIN
---// ============================================================
-local function findNearestCoin()
-    local char = LocalPlayer.Character
-    if not char then return nil end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return nil end
-
-    local best, bestDist = nil, math.huge
-
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if isCoin(obj) and not collectedCoins[obj] then
-            local pos = getCoinPosition(obj)
-            if pos then
-                local dist = (hrp.Position - pos).Magnitude
-                if dist < bestDist and dist <= Config.MaxDistance then
-                    bestDist = dist
-                    best = obj
-                end
-            end
-        end
-    end
-
-    return best
-end
-
---// ============================================================
---//  COUNT ALL COINS
---// ============================================================
-local function countAllCoins()
-    local count = 0
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if isCoin(obj) then
-            count = count + 1
-        end
-    end
-    return count
 end
 
 --// ============================================================
 --//  ANTI-MURDERER ESCAPE
 --// ============================================================
-local function escapeFromMurderer()
-    if not Config.AntiMurderer then return false end
-
-    local myChar = LocalPlayer.Character
-    if not myChar then return false end
-    local myHrp = myChar:FindFirstChild("HumanoidRootPart")
-    if not myHrp then return false end
-
+local function shouldEscapeFromMurderer()
+    if not ANTI_MURDERER then return false end
+    local char, hum, hrp = getChar()
+    if not hrp then return false end
     local murderer = findMurderer()
     if not murderer or not murderer.Character then return false end
     local mHrp = murderer.Character:FindFirstChild("HumanoidRootPart")
     if not mHrp then return false end
-
-    local dist = (myHrp.Position - mHrp.Position).Magnitude
-    if dist > Config.DangerRange then return false end
-
-    -- Тікаємо в протилежний бік
-    local escapeDir = (myHrp.Position - mHrp.Position).Unit
-    if bodyVelocity then
-        bodyVelocity.Velocity = escapeDir * Config.FlySpeed * 3
-    end
-    return true
+    local dist = (hrp.Position - mHrp.Position).Magnitude
+    return dist <= DANGER_RANGE
 end
 
 --// ============================================================
---//  SKIDFLING (Murderer)
+--//  SKIDFLING
 --// ============================================================
 local function SkidFling(TargetPlayer, duration)
     if not TargetPlayer or TargetPlayer == LocalPlayer then return false end
     if not TargetPlayer.Character then return false end
 
     local Character = LocalPlayer.Character
-    local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+    if not Character then return false end
+    local Humanoid = Character:FindFirstChildOfClass("Humanoid")
     local RootPart = Humanoid and Humanoid.RootPart
+    if not Humanoid or not RootPart then return false end
 
     local TCharacter = TargetPlayer.Character
     local THumanoid = TCharacter:FindFirstChildOfClass("Humanoid")
     local TRootPart = THumanoid and THumanoid.RootPart
     local THead = TCharacter:FindFirstChild("Head")
-
-    if not (Character and Humanoid and RootPart and THumanoid and TRootPart) then return false end
+    if not (THumanoid and TRootPart) then return false end
 
     if RootPart.Velocity.Magnitude < 50 then
         getgenv().AutoFarmOldPos = RootPart.CFrame
@@ -307,7 +261,6 @@ local function SkidFling(TargetPlayer, duration)
         local TimeToWait = duration or 2
         local Time = tick()
         local Angle = 0
-
         repeat
             if not RootPart or not THumanoid then break end
             if BasePart.Velocity.Magnitude < 50 then
@@ -324,10 +277,6 @@ local function SkidFling(TargetPlayer, duration)
                 FPos(BasePart, CFrame.new(0, 1.5, THumanoid.WalkSpeed), CFrame.Angles(math.rad(90), 0, 0))
                 task.wait()
                 FPos(BasePart, CFrame.new(0, -1.5, -THumanoid.WalkSpeed), CFrame.Angles(0, 0, 0))
-                task.wait()
-                FPos(BasePart, CFrame.new(0, 1.5, TRootPart.Velocity.Magnitude / 1.25), CFrame.Angles(math.rad(90), 0, 0))
-                task.wait()
-                FPos(BasePart, CFrame.new(0, -1.5, -TRootPart.Velocity.Magnitude / 1.25), CFrame.Angles(0, 0, 0))
                 task.wait()
             end
         until BasePart.Velocity.Magnitude > 500 
@@ -354,15 +303,12 @@ local function SkidFling(TargetPlayer, duration)
         end
     elseif TRootPart then
         SFBasePart(TRootPart)
-    elseif THead then
-        SFBasePart(THead)
     end
 
     BV:Destroy()
     Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
 
-    -- Return to start
-    task.wait(0.5)
+    task.wait(0.3)
     if getgenv().AutoFarmOldPos and RootPart then
         pcall(function()
             RootPart.CFrame = getgenv().AutoFarmOldPos
@@ -382,178 +328,157 @@ local function autoFlingMurderer()
 
     local murderer = findMurderer()
     if not murderer then
-        log("No Murderer found to fling")
+        log("No Murderer to fling")
         flingInProgress = false
         return
     end
 
-    log("Auto-flinging Murderer: " .. murderer.Name)
-    notify("💥 Auto Fling", "Flinging " .. murderer.Name, 3)
+    log("Auto-flinging: " .. murderer.Name)
 
-    -- Підлітаємо до Murderer-а
-    local myChar = LocalPlayer.Character
-    local murdererChar = murderer.Character
-    if myChar and murdererChar then
-        local myHrp = myChar:FindFirstChild("HumanoidRootPart")
-        local mHrp = murdererChar:FindFirstChild("HumanoidRootPart")
-        if myHrp and mHrp then
-            task.wait(Config.FlingDelay)
+    task.wait(FLING_DELAY)
+
+    local char, hum, hrp = getChar()
+    local mChar = murderer.Character
+    if hrp and mChar then
+        local mHrp = mChar:FindFirstChild("HumanoidRootPart")
+        if mHrp then
             pcall(function()
-                myHrp.CFrame = mHrp.CFrame * CFrame.new(2, 0, 2)
+                hrp.CFrame = mHrp.CFrame * CFrame.new(2, 0, 2)
             end)
             task.wait(0.1)
         end
     end
 
-    -- Флингаємо
     local ok = pcall(SkidFling, murderer, 2)
     if ok then
-        log("Fling success: " .. murderer.Name)
+        log("Fling OK: " .. murderer.Name)
         notify("✅ Fling", "Flinged " .. murderer.Name, 3)
-    else
-        log("Fling failed")
     end
 
     flingInProgress = false
 end
 
 --// ============================================================
---//  RESET ON ROUND
+--//  ROUND RESET
 --// ============================================================
 local function resetForNewRound()
     collectedCoins = {}
     currentTarget = nil
-    totalCoinsFound = countAllCoins()
+    totalCoinsCollected = 0
     roundStartTime = tick()
     flingInProgress = false
-    log("New round — coins found: " .. totalCoinsFound)
+    log("New round — coins: " .. countAllCoins())
 end
 
 --// ============================================================
---//  MAIN LOOP
+--//  DEATH DETECTION
 --// ============================================================
-local mainConn = nil
-local lastCoinCount = 0
-local coinCountTimer = 0
-
-local function startLoop()
-    if mainConn then mainConn:Disconnect() end
-
-    mainConn = RunService.Heartbeat:Connect(function(dt)
+local function startDeathCheck()
+    if deathCheckConn then deathCheckConn:Disconnect() end
+    deathCheckConn = RunService.Heartbeat:Connect(function()
         if not enabled then return end
-
         local char = LocalPlayer.Character
         if not char then return end
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-        if not hrp then return end
         local hum = char:FindFirstChildOfClass("Humanoid")
-        if not hum or hum.Health <= 0 then return end
+        if hum and hum.Health <= 0 and AUTO_FLING and not flingInProgress then
+            task.spawn(autoFlingMurderer)
+        end
+    end)
+end
 
-        -- Перевірка: чи закінчився фарм (всі монети зібрані)
-        coinCountTimer = coinCountTimer + dt
-        if coinCountTimer > 2 then
-            coinCountTimer = 0
-            local remaining = countAllCoins()
-            if remaining == 0 and Config.AutoFlingAfterFarm and not flingInProgress then
-                log("All coins collected — auto flinging Murderer")
+--// ============================================================
+--//  MAIN LOOP — CFrame FLY (Speed = 22)
+--// ============================================================
+local coinCheckTimer = 0
+
+local function startMainLoop()
+    if mainLoopConn then mainLoopConn:Disconnect() end
+    mainLoopConn = RunService.RenderStepped:Connect(function(dt)
+        if not enabled then return end
+
+        local char, hum, hrp = getChar()
+        if not hrp then return end
+
+        -- Anti-Murderer escape
+        if shouldEscapeFromMurderer() then
+            local murderer = findMurderer()
+            if murderer and murderer.Character then
+                local mHrp = murderer.Character:FindFirstChild("HumanoidRootPart")
+                if mHrp then
+                    local escapeDir = (hrp.Position - mHrp.Position).Unit
+                    local newPos = hrp.Position + escapeDir * FLY_SPEED * 3 * dt
+                    hrp.CFrame = CFrame.new(newPos)
+                    hrp.AssemblyLinearVelocity = Vector3.zero
+                end
+            end
+            return
+        end
+
+        -- Перевірка чи всі монети зібрані
+        coinCheckTimer = coinCheckTimer + dt
+        if coinCheckTimer > 3 then
+            coinCheckTimer = 0
+            if countAllCoins() == 0 and AUTO_FLING and not flingInProgress then
+                log("All coins collected — auto-flinging")
                 task.spawn(autoFlingMurderer)
                 return
             end
         end
 
-        -- Anti-murderer escape
-        if escapeFromMurderer() then
-            return
-        end
-
         -- Оновлення цілі
         local now = tick()
-        if now - lastUpdate > Config.UpdateRate then
-            lastUpdate = now
+        if now - lastTargetUpdate > UPDATE_RATE or not currentTarget or not currentTarget.Parent then
+            lastTargetUpdate = now
             currentTarget = findNearestCoin()
         end
 
-        -- Летимо до цілі
-        if currentTarget and currentTarget.Parent then
-            local targetPos = getCoinPosition(currentTarget)
-            if targetPos and bodyVelocity then
-                local direction = (targetPos - hrp.Position)
+        -- Політ до монети (швидкість 22)
+        if currentTarget then
+            local pos = getCoinPosition(currentTarget)
+            if pos then
+                local currentPos = hrp.Position
+                local direction = pos - currentPos
                 local dist = direction.Magnitude
-
-                if dist < 3 then
-                    -- Близько — просто продовжуємо (гра сама дасть підібрати)
-                    bodyVelocity.Velocity = Vector3.zero
+                if dist > 2.5 then
+                    local step = direction.Unit * FLY_SPEED * dt
+                    if step.Magnitude > dist then step = direction.Unit * dist end
+                    hrp.CFrame = CFrame.new(currentPos + step)
+                    hrp.AssemblyLinearVelocity = Vector3.zero
+                    hrp.AssemblyAngularVelocity = Vector3.zero
                 else
-                    -- Летимо в напрямку монети
-                    bodyVelocity.Velocity = direction.Unit * Config.FlySpeed
+                    if not collectedCoins[currentTarget] then
+                        collectedCoins[currentTarget] = true
+                        totalCoinsCollected = totalCoinsCollected + 1
+                    end
+                    currentTarget = nil
                 end
-            end
-        else
-            -- Немає цілі — шукаємо знову
-            currentTarget = findNearestCoin()
-            if not currentTarget and bodyVelocity then
-                bodyVelocity.Velocity = Vector3.zero
+            else
+                currentTarget = nil
             end
         end
     end)
 end
 
-local function stopLoop()
-    if mainConn then mainConn:Disconnect(); mainConn = nil end
-    stopFly()
-    currentTarget = nil
+local function stopMainLoop()
+    if mainLoopConn then mainLoopConn:Disconnect(); mainLoopConn = nil end
+    if deathCheckConn then deathCheckConn:Disconnect(); deathCheckConn = nil end
 end
 
 --// ============================================================
---//  CHARACTER EVENTS
+--//  CHARACTER RESPAWN
 --// ============================================================
 LocalPlayer.CharacterAdded:Connect(function(char)
     task.wait(1.5)
     resetForNewRound()
-
     if enabled then
-        -- Перезапуск noclip + fly
         disableNoclip()
+        task.wait(0.1)
         enableNoclip()
-        task.wait(0.3)
-        setupFly()
-    end
-end)
-
--- Виявлення смерті гравця
-task.spawn(function()
-    while task.wait(0.5) do
-        if not enabled then continue end
-        local char = LocalPlayer.Character
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
-        if not hum or hum.Health <= 0 then
-            if not flingInProgress and Config.AutoFlingAfterFarm then
-                log("Player died — auto flinging Murderer")
-                task.spawn(autoFlingMurderer)
-            end
-        end
     end
 end)
 
 --// ============================================================
---//  AUTO-START DETECTION
---// ============================================================
-task.spawn(function()
-    while task.wait(2) do
-        if Config.AutoStart and Config.Enabled then
-            local char = LocalPlayer.Character
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
-            -- Якщо раунд почався (новий персонаж) — переконатись що налаштування активні
-            if hum and hum.Health > 0 then
-                if not noclipEnabled then enableNoclip() end
-                if not flying then setupFly() end
-            end
-        end
-    end
-end)
-
---// ============================================================
---//  MODULE API
+--//  PUBLIC API (без слайдерів швидкості)
 --// ============================================================
 local AutoFarm = {}
 AutoFarm.__index = AutoFarm
@@ -564,41 +489,42 @@ end
 
 function AutoFarm:setEnabled(state)
     enabled = state
-    Config.Enabled = state
-
     if state then
         resetForNewRound()
         enableNoclip()
-        task.wait(0.2)
-        setupFly()
-        startLoop()
-        log("ON — Auto Start: " .. tostring(Config.AutoStart))
-        notify("💰 Auto Farm", "Enabled", 2)
+        task.wait(0.1)
+        startMainLoop()
+        startDeathCheck()
+        log("═══ Auto Farm ENABLED (Speed: " .. FLY_SPEED .. ") ═══")
+        notify("💰 Auto Farm", "Enabled (Speed: " .. FLY_SPEED .. ")", 3)
     else
-        stopLoop()
+        stopMainLoop()
         disableNoclip()
-        log("OFF")
+        log("Auto Farm DISABLED")
         notify("💰 Auto Farm", "Disabled", 2)
     end
 end
 
-function AutoFarm:setFlySpeed(v) Config.FlySpeed = v end
-function AutoFarm:setMaxDistance(v) Config.MaxDistance = v end
-function AutoFarm:setAntiMurderer(v) Config.AntiMurderer = v end
-function AutoFarm:setAutoFling(v) Config.AutoFlingAfterFarm = v end
-function AutoFarm:setAutoStart(v) Config.AutoStart = v end
+-- Stub функції для сумісності з UI (нічого не роблять)
+function AutoFarm:setSpeed() end
+function AutoFarm:setFlySpeed() end
+function AutoFarm:setAutoFling() end
+function AutoFarm:setAntiMurderer() end
+function AutoFarm:setAutoStart() end
+function AutoFarm:setAutoKill() end
+function AutoFarm:setKillDelay() end
 
 function AutoFarm:getStats()
     return {
-        CollectedCoins = totalCoinsFound,
-        TotalCoins = totalCoinsFound,
+        CoinsCollected = totalCoinsCollected,
         RoundTime = math.floor(tick() - roundStartTime),
+        Speed = FLY_SPEED,
     }
 end
 
 log("═══════════════════════════════════")
-log("TrustHub Auto Farm v2.0 loaded")
-log("Auto round start | Noclip fly | Auto fling")
+log("TrustHub Auto Farm v5.0")
+log("Speed: " .. FLY_SPEED .. " (fixed, safe)")
 log("═══════════════════════════════════")
 
 return AutoFarm.new()

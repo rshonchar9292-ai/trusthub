@@ -1,5 +1,5 @@
 --// ==================================================
---// TrustHub UI v9.0 — 6 tabs + Kill All
+--// TrustHub UI v10.0 — 7 tabs, full edition
 --// ==================================================
 
 local TweenService     = game:GetService("TweenService")
@@ -28,7 +28,9 @@ local Theme = {
     Stroke     = Color3.fromRGB(58, 58, 78),
 }
 
+--// ==================================================
 --// HELPERS
+--// ==================================================
 local function tween(obj, time, props, style, dir)
     local t = TweenService:Create(
         obj,
@@ -75,7 +77,9 @@ local function createRipple(parent, x, y)
     t.Completed:Connect(function() r:Destroy() end)
 end
 
+--// ==================================================
 --// TOGGLE
+--// ==================================================
 local function createToggle(parent, text, default, callback)
     local Btn = Instance.new("TextButton")
     Btn.Size = UDim2.new(1, -16, 0, 36)
@@ -129,7 +133,9 @@ local function createToggle(parent, text, default, callback)
     return Btn
 end
 
+--// ==================================================
 --// SLIDER
+--// ==================================================
 local function createSlider(parent, text, min, max, default, callback)
     local Frame = Instance.new("Frame")
     Frame.Size = UDim2.new(1, -16, 0, 52)
@@ -208,7 +214,9 @@ local function createSlider(parent, text, min, max, default, callback)
     return Frame
 end
 
+--// ==================================================
 --// SECTION
+--// ==================================================
 local function createSection(parent, text)
     local Lbl = Instance.new("TextLabel")
     Lbl.Size = UDim2.new(1, -16, 0, 22)
@@ -229,7 +237,9 @@ local function createSection(parent, text)
     return Lbl
 end
 
+--// ==================================================
 --// ACTION BUTTON
+--// ==================================================
 local function createActionButton(parent, text, color, callback)
     local Btn = Instance.new("TextButton")
     Btn.Size = UDim2.new(1, -16, 0, 46)
@@ -264,7 +274,9 @@ local function createActionButton(parent, text, color, callback)
     return Btn
 end
 
+--// ==================================================
 --// PLAYER ROW
+--// ==================================================
 local function createPlayerRow(parent, plr, role, roleColor, callback)
     local row = Instance.new("TextButton")
     row.Size = UDim2.new(1, -8, 0, 46)
@@ -465,7 +477,7 @@ function UI:init(Features)
     VersionLbl.Size = UDim2.new(0, 60, 1, 0)
     VersionLbl.Position = UDim2.new(1, -100, 0, 0)
     VersionLbl.BackgroundTransparency = 1
-    VersionLbl.Text = "v9.0"
+    VersionLbl.Text = "v10.0"
     VersionLbl.TextColor3 = Theme.TextDim
     VersionLbl.Font = Enum.Font.Gotham
     VersionLbl.TextSize = 11
@@ -617,8 +629,9 @@ function UI:init(Features)
         return Page
     end
 
-    --// 6 Tabs
+    --// 7 Tabs
     local AimPage       = createTab("Aimbot", "A")
+    local MurdererPage  = createTab("Murderer", "🔪")
     local FlingPage     = createTab("Fling", "F")
     local VisualsPage   = createTab("Visuals", "V")
     local MovePage      = createTab("Movement", "M")
@@ -639,6 +652,39 @@ function UI:init(Features)
             Features.SilentAim:setHitChance(v) 
         end
     end)
+
+    --// ==================================================
+    --// MURDERER TAB
+    --// ==================================================
+    createSection(MurdererPage, "🔪 Murderer Actions")
+
+    createActionButton(MurdererPage, "💀 KILL ALL PLAYERS", Color3.fromRGB(200, 30, 30), function()
+        if Features.Murderer then Features.Murderer:killAll() end
+    end)
+
+    createActionButton(MurdererPage, "💥 FLING ALL PLAYERS", Color3.fromRGB(255, 100, 100), function()
+        if Features.Murderer then Features.Murderer:flingAll() end
+    end)
+
+    createToggle(MurdererPage, "Auto Kill (every 2s)", false, function(v)
+        if Features.Murderer then Features.Murderer:setAutoKill(v) end
+    end)
+
+    createActionButton(MurdererPage, "🔍 DIAGNOSTICS", Theme.Accent, function()
+        if Features.Murderer then Features.Murderer:diagnostics() end
+    end)
+
+    local murInfo = Instance.new("TextLabel")
+    murInfo.Size = UDim2.new(1, -16, 0, 90)
+    murInfo.BackgroundTransparency = 1
+    murInfo.Text = "⚠ Works ONLY as Murderer (with knife)\n\n• KILL ALL — attacks all via knife remote\n• FLING ALL — flings everyone off the map\n• Auto Kill — kills every 2 seconds"
+    murInfo.TextColor3 = Theme.TextDim
+    murInfo.Font = Enum.Font.Gotham
+    murInfo.TextSize = 11
+    murInfo.TextXAlignment = Enum.TextXAlignment.Left
+    murInfo.TextYAlignment = Enum.TextYAlignment.Top
+    murInfo.TextWrapped = true
+    murInfo.Parent = MurdererPage
 
     --// ==================================================
     --// FLING TAB
@@ -957,7 +1003,7 @@ function UI:init(Features)
     infoText.Size = UDim2.new(1, -20, 1, 0)
     infoText.Position = UDim2.new(0, 10, 0, 0)
     infoText.BackgroundTransparency = 1
-    infoText.Text = "TrustHub v9.0\n\nF4  — toggle menu\nT   — open/close\nC   — toggle Silent Aim\n\nTabs:\nAimbot | Fling | Visuals | Movement | Animation | Settings"
+    infoText.Text = "TrustHub v10.0\n\nF4  — toggle menu\nT   — open/close\nC   — toggle Silent Aim\n\nTabs:\nAimbot | Murderer | Fling | Visuals | Movement | Animation | Settings"
     infoText.TextColor3 = Theme.TextDim
     infoText.Font = Enum.Font.Gotham
     infoText.TextSize = 12

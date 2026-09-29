@@ -1,5 +1,5 @@
 --// ==================================================
---// TrustHub UI v11.0 — 7 tabs + Fly + InfJump + FOV
+--// TrustHub UI v12.0 — 7 tabs, Silent Aim toggle
 --// ==================================================
 
 local TweenService     = game:GetService("TweenService")
@@ -465,7 +465,7 @@ function UI:init(Features)
     VersionLbl.Size = UDim2.new(0, 60, 1, 0)
     VersionLbl.Position = UDim2.new(1, -100, 0, 0)
     VersionLbl.BackgroundTransparency = 1
-    VersionLbl.Text = "v11.0"
+    VersionLbl.Text = "v12.0"
     VersionLbl.TextColor3 = Theme.TextDim
     VersionLbl.Font = Enum.Font.Gotham
     VersionLbl.TextSize = 11
@@ -631,24 +631,45 @@ function UI:init(Features)
     --// ==================================================
     createSection(AimPage, "Silent Aim")
 
-    local silentInfo = Instance.new("Frame")
-    silentInfo.Size = UDim2.new(1, -16, 0, 60)
-    silentInfo.BackgroundColor3 = Theme.Element
-    silentInfo.BorderSizePixel = 0
-    silentInfo.Parent = AimPage
-    corner(silentInfo, 8)
+    createToggle(AimPage, "Enable Silent Aim", false, function(v)
+        if Features.SilentAim then Features.SilentAim:setEnabled(v) end
+    end)
 
-    local silentLabel = Instance.new("TextLabel")
-    silentLabel.Size = UDim2.new(1, -20, 1, 0)
-    silentLabel.Position = UDim2.new(0, 10, 0, 0)
-    silentLabel.BackgroundTransparency = 1
-    silentLabel.Text = "✓ Silent Aim ACTIVE\nPistol only • Always ON"
-    silentLabel.TextColor3 = Theme.Success
-    silentLabel.Font = Enum.Font.GothamBold
-    silentLabel.TextSize = 12
-    silentLabel.TextXAlignment = Enum.TextXAlignment.Left
-    silentLabel.TextYAlignment = Enum.TextYAlignment.Center
-    silentLabel.Parent = silentInfo
+    createSlider(AimPage, "FOV Radius", 50, 600, 200, function(v)
+        if Features.SilentAim and Features.SilentAim.setFOV then 
+            Features.SilentAim:setFOV(v) 
+        end
+    end)
+
+    createSlider(AimPage, "Hit Chance %", 1, 100, 100, function(v)
+        if Features.SilentAim and Features.SilentAim.setHitChance then 
+            Features.SilentAim:setHitChance(v) 
+        end
+    end)
+
+    createSlider(AimPage, "Prediction", 0, 1, 0.135, function(v)
+        if Features.SilentAim and Features.SilentAim.setPrediction then 
+            Features.SilentAim:setPrediction(v) 
+        end
+    end)
+
+    createToggle(AimPage, "Team Check", true, function(v)
+        if Features.SilentAim and Features.SilentAim.setTeamCheck then 
+            Features.SilentAim:setTeamCheck(v) 
+        end
+    end)
+
+    createToggle(AimPage, "Wall Check", false, function(v)
+        if Features.SilentAim and Features.SilentAim.setWallCheck then 
+            Features.SilentAim:setWallCheck(v) 
+        end
+    end)
+
+    createToggle(AimPage, "Show FOV Circle", true, function(v)
+        if Features.SilentAim and Features.SilentAim.setShowFOV then 
+            Features.SilentAim:setShowFOV(v) 
+        end
+    end)
 
     --// ==================================================
     --// MURDERER TAB
@@ -674,7 +695,7 @@ function UI:init(Features)
     local murInfo = Instance.new("TextLabel")
     murInfo.Size = UDim2.new(1, -16, 0, 90)
     murInfo.BackgroundTransparency = 1
-    murInfo.Text = "⚠ Works ONLY as Murderer (with knife)\n\n• KILL ALL — attacks all via knife remote\n• FLING ALL — flings everyone off the map\n• Auto Kill — kills every 2 seconds"
+    murInfo.Text = "⚠ Works ONLY as Murderer (with knife)"
     murInfo.TextColor3 = Theme.TextDim
     murInfo.Font = Enum.Font.Gotham
     murInfo.TextSize = 11
@@ -773,7 +794,7 @@ function UI:init(Features)
     legendText.TextYAlignment = Enum.TextYAlignment.Center
     legendText.Parent = legendFrame
 
-    --// FOV (регульований)
+    --// FOV
     createSection(VisualsPage, "Camera FOV")
 
     createToggle(VisualsPage, "Enable FOV Changer", false, function(v)
@@ -861,12 +882,6 @@ function UI:init(Features)
         end
     end)
 
-    createToggle(MovePage, "Escape from Murderer", true, function(v)
-        if Features.AutoFarm and Features.AutoFarm.setAntiMurderer then 
-            Features.AutoFarm:setAntiMurderer(v) 
-        end
-    end)
-
     local farmInfo = Instance.new("TextLabel")
     farmInfo.Size = UDim2.new(1, -16, 0, 30)
     farmInfo.BackgroundTransparency = 1
@@ -891,27 +906,6 @@ function UI:init(Features)
             Features.AutoFarm:setKillDelay(v) 
         end
     end)
-
-    -- KILL ALL
-    createSection(MovePage, "💀 Kill All (Murderer Only)")
-
-    createActionButton(MovePage, "💀 KILL ALL NOW", Color3.fromRGB(200, 30, 30), function()
-        if Features.AutoFarm and Features.AutoFarm.killAll then 
-            Features.AutoFarm:killAll() 
-        end
-    end)
-
-    local killAllInfo = Instance.new("TextLabel")
-    killAllInfo.Size = UDim2.new(1, -16, 0, 40)
-    killAllInfo.BackgroundTransparency = 1
-    killAllInfo.Text = "⚠ Works ONLY as Murderer (with knife)"
-    killAllInfo.TextColor3 = Color3.fromRGB(255, 150, 100)
-    killAllInfo.Font = Enum.Font.Gotham
-    killAllInfo.TextSize = 11
-    killAllInfo.TextXAlignment = Enum.TextXAlignment.Left
-    killAllInfo.TextYAlignment = Enum.TextYAlignment.Top
-    killAllInfo.TextWrapped = true
-    killAllInfo.Parent = MovePage
 
     -- SPEED
     createSection(MovePage, "Speed")
@@ -1053,7 +1047,7 @@ function UI:init(Features)
     infoText.Size = UDim2.new(1, -20, 1, 0)
     infoText.Position = UDim2.new(0, 10, 0, 0)
     infoText.BackgroundTransparency = 1
-    infoText.Text = "TrustHub v11.0\n\nF4  — toggle menu\nT   — open/close\nC   — toggle Silent Aim\n\nTabs:\nAimbot | Murderer | Fling | Visuals | Movement | Animation | Settings"
+    infoText.Text = "TrustHub v12.0\n\nF4  — toggle menu\n\nTabs:\nAimbot | Murderer | Fling | Visuals | Movement | Animation | Settings"
     infoText.TextColor3 = Theme.TextDim
     infoText.Font = Enum.Font.Gotham
     infoText.TextSize = 12

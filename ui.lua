@@ -1,5 +1,5 @@
 --// ==================================================
---// TrustHub UI v10.0 — 7 tabs, full edition
+--// TrustHub UI v11.0 — 7 tabs + Fly + InfJump + FOV
 --// ==================================================
 
 local TweenService     = game:GetService("TweenService")
@@ -28,9 +28,7 @@ local Theme = {
     Stroke     = Color3.fromRGB(58, 58, 78),
 }
 
---// ==================================================
 --// HELPERS
---// ==================================================
 local function tween(obj, time, props, style, dir)
     local t = TweenService:Create(
         obj,
@@ -77,9 +75,7 @@ local function createRipple(parent, x, y)
     t.Completed:Connect(function() r:Destroy() end)
 end
 
---// ==================================================
 --// TOGGLE
---// ==================================================
 local function createToggle(parent, text, default, callback)
     local Btn = Instance.new("TextButton")
     Btn.Size = UDim2.new(1, -16, 0, 36)
@@ -133,9 +129,7 @@ local function createToggle(parent, text, default, callback)
     return Btn
 end
 
---// ==================================================
 --// SLIDER
---// ==================================================
 local function createSlider(parent, text, min, max, default, callback)
     local Frame = Instance.new("Frame")
     Frame.Size = UDim2.new(1, -16, 0, 52)
@@ -214,9 +208,7 @@ local function createSlider(parent, text, min, max, default, callback)
     return Frame
 end
 
---// ==================================================
 --// SECTION
---// ==================================================
 local function createSection(parent, text)
     local Lbl = Instance.new("TextLabel")
     Lbl.Size = UDim2.new(1, -16, 0, 22)
@@ -237,9 +229,7 @@ local function createSection(parent, text)
     return Lbl
 end
 
---// ==================================================
 --// ACTION BUTTON
---// ==================================================
 local function createActionButton(parent, text, color, callback)
     local Btn = Instance.new("TextButton")
     Btn.Size = UDim2.new(1, -16, 0, 46)
@@ -274,9 +264,7 @@ local function createActionButton(parent, text, color, callback)
     return Btn
 end
 
---// ==================================================
 --// PLAYER ROW
---// ==================================================
 local function createPlayerRow(parent, plr, role, roleColor, callback)
     local row = Instance.new("TextButton")
     row.Size = UDim2.new(1, -8, 0, 46)
@@ -477,7 +465,7 @@ function UI:init(Features)
     VersionLbl.Size = UDim2.new(0, 60, 1, 0)
     VersionLbl.Position = UDim2.new(1, -100, 0, 0)
     VersionLbl.BackgroundTransparency = 1
-    VersionLbl.Text = "v10.0"
+    VersionLbl.Text = "v11.0"
     VersionLbl.TextColor3 = Theme.TextDim
     VersionLbl.Font = Enum.Font.Gotham
     VersionLbl.TextSize = 11
@@ -643,15 +631,24 @@ function UI:init(Features)
     --// ==================================================
     createSection(AimPage, "Silent Aim")
 
-    createToggle(AimPage, "Enable Silent Aim", false, function(v)
-        if Features.SilentAim then Features.SilentAim:setEnabled(v) end
-    end)
+    local silentInfo = Instance.new("Frame")
+    silentInfo.Size = UDim2.new(1, -16, 0, 60)
+    silentInfo.BackgroundColor3 = Theme.Element
+    silentInfo.BorderSizePixel = 0
+    silentInfo.Parent = AimPage
+    corner(silentInfo, 8)
 
-    createSlider(AimPage, "Hit Chance %", 1, 100, 100, function(v)
-        if Features.SilentAim and Features.SilentAim.setHitChance then 
-            Features.SilentAim:setHitChance(v) 
-        end
-    end)
+    local silentLabel = Instance.new("TextLabel")
+    silentLabel.Size = UDim2.new(1, -20, 1, 0)
+    silentLabel.Position = UDim2.new(0, 10, 0, 0)
+    silentLabel.BackgroundTransparency = 1
+    silentLabel.Text = "✓ Silent Aim ACTIVE\nPistol only • Always ON"
+    silentLabel.TextColor3 = Theme.Success
+    silentLabel.Font = Enum.Font.GothamBold
+    silentLabel.TextSize = 12
+    silentLabel.TextXAlignment = Enum.TextXAlignment.Left
+    silentLabel.TextYAlignment = Enum.TextYAlignment.Center
+    silentLabel.Parent = silentInfo
 
     --// ==================================================
     --// MURDERER TAB
@@ -776,9 +773,68 @@ function UI:init(Features)
     legendText.TextYAlignment = Enum.TextYAlignment.Center
     legendText.Parent = legendFrame
 
+    --// FOV (регульований)
+    createSection(VisualsPage, "Camera FOV")
+
+    createToggle(VisualsPage, "Enable FOV Changer", false, function(v)
+        if Features.FOV then Features.FOV:setEnabled(v) end
+    end)
+
+    createSlider(VisualsPage, "FOV Value", 20, 120, 70, function(v)
+        if Features.FOV and Features.FOV.setValue then Features.FOV:setValue(v) end
+    end)
+
+    local fovInfo = Instance.new("TextLabel")
+    fovInfo.Size = UDim2.new(1, -16, 0, 30)
+    fovInfo.BackgroundTransparency = 1
+    fovInfo.Text = "70 = default  •  100+ = widescreen"
+    fovInfo.TextColor3 = Theme.TextDim
+    fovInfo.Font = Enum.Font.Gotham
+    fovInfo.TextSize = 11
+    fovInfo.TextXAlignment = Enum.TextXAlignment.Left
+    fovInfo.Parent = VisualsPage
+
     --// ==================================================
     --// MOVEMENT TAB
     --// ==================================================
+
+    -- FLY
+    createSection(MovePage, "✈ Fly")
+
+    createToggle(MovePage, "Enable Fly", false, function(v)
+        if Features.Fly then Features.Fly:setEnabled(v) end
+    end)
+
+    createSlider(MovePage, "Fly Speed", 10, 200, 60, function(v)
+        if Features.Fly and Features.Fly.setSpeed then Features.Fly:setSpeed(v) end
+    end)
+
+    local flyInfo = Instance.new("TextLabel")
+    flyInfo.Size = UDim2.new(1, -16, 0, 30)
+    flyInfo.BackgroundTransparency = 1
+    flyInfo.Text = "WASD to move  •  Space/Ctrl = up/down"
+    flyInfo.TextColor3 = Theme.TextDim
+    flyInfo.Font = Enum.Font.Gotham
+    flyInfo.TextSize = 11
+    flyInfo.TextXAlignment = Enum.TextXAlignment.Left
+    flyInfo.Parent = MovePage
+
+    -- INFINITE JUMP
+    createSection(MovePage, "🦘 Infinite Jump")
+
+    createToggle(MovePage, "Enable Infinite Jump", false, function(v)
+        if Features.InfJump then Features.InfJump:setEnabled(v) end
+    end)
+
+    local infjInfo = Instance.new("TextLabel")
+    infjInfo.Size = UDim2.new(1, -16, 0, 20)
+    infjInfo.BackgroundTransparency = 1
+    infjInfo.Text = "Hold Space to keep jumping"
+    infjInfo.TextColor3 = Theme.TextDim
+    infjInfo.Font = Enum.Font.Gotham
+    infjInfo.TextSize = 11
+    infjInfo.TextXAlignment = Enum.TextXAlignment.Left
+    infjInfo.Parent = MovePage
 
     -- NOCLIP
     createSection(MovePage, "Noclip")
@@ -799,12 +855,6 @@ function UI:init(Features)
         if Features.AutoFarm then Features.AutoFarm:setEnabled(v) end
     end)
 
-    createSlider(MovePage, "Fly Speed", 5, 100, 22, function(v)
-        if Features.AutoFarm and Features.AutoFarm.setSpeed then 
-            Features.AutoFarm:setSpeed(v) 
-        end
-    end)
-
     createToggle(MovePage, "Auto Fling Murderer", true, function(v)
         if Features.AutoFarm and Features.AutoFarm.setAutoFling then 
             Features.AutoFarm:setAutoFling(v) 
@@ -820,14 +870,14 @@ function UI:init(Features)
     local farmInfo = Instance.new("TextLabel")
     farmInfo.Size = UDim2.new(1, -16, 0, 30)
     farmInfo.BackgroundTransparency = 1
-    farmInfo.Text = "Flies through walls to collect coins"
+    farmInfo.Text = "Flies through walls to collect coins (Speed: 22)"
     farmInfo.TextColor3 = Theme.TextDim
     farmInfo.Font = Enum.Font.Gotham
     farmInfo.TextSize = 11
     farmInfo.TextXAlignment = Enum.TextXAlignment.Left
     farmInfo.Parent = MovePage
 
-    -- AUTO KILL MURDERER
+    -- AUTO KILL
     createSection(MovePage, "💥 Auto Kill Murderer")
 
     createToggle(MovePage, "Enable Auto Kill Murder", false, function(v)
@@ -842,7 +892,7 @@ function UI:init(Features)
         end
     end)
 
-    -- 💀 KILL ALL
+    -- KILL ALL
     createSection(MovePage, "💀 Kill All (Murderer Only)")
 
     createActionButton(MovePage, "💀 KILL ALL NOW", Color3.fromRGB(200, 30, 30), function()
@@ -852,9 +902,9 @@ function UI:init(Features)
     end)
 
     local killAllInfo = Instance.new("TextLabel")
-    killAllInfo.Size = UDim2.new(1, -16, 0, 50)
+    killAllInfo.Size = UDim2.new(1, -16, 0, 40)
     killAllInfo.BackgroundTransparency = 1
-    killAllInfo.Text = "⚠ Works ONLY as Murderer (with knife)\nAttacks all players with knife remote"
+    killAllInfo.Text = "⚠ Works ONLY as Murderer (with knife)"
     killAllInfo.TextColor3 = Color3.fromRGB(255, 150, 100)
     killAllInfo.Font = Enum.Font.Gotham
     killAllInfo.TextSize = 11
@@ -1003,7 +1053,7 @@ function UI:init(Features)
     infoText.Size = UDim2.new(1, -20, 1, 0)
     infoText.Position = UDim2.new(0, 10, 0, 0)
     infoText.BackgroundTransparency = 1
-    infoText.Text = "TrustHub v10.0\n\nF4  — toggle menu\nT   — open/close\nC   — toggle Silent Aim\n\nTabs:\nAimbot | Murderer | Fling | Visuals | Movement | Animation | Settings"
+    infoText.Text = "TrustHub v11.0\n\nF4  — toggle menu\nT   — open/close\nC   — toggle Silent Aim\n\nTabs:\nAimbot | Murderer | Fling | Visuals | Movement | Animation | Settings"
     infoText.TextColor3 = Theme.TextDim
     infoText.Font = Enum.Font.Gotham
     infoText.TextSize = 12

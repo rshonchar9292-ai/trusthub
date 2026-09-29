@@ -1,5 +1,5 @@
 --// ╔══════════════════════════════════════════════════════════════╗
---// ║  TrustHub - Loader v5.0                                      ║
+--// ║  TrustHub - Loader v6.0                                      ║
 --// ║  Author: rshonchar9292-ai                                    ║
 --// ╚══════════════════════════════════════════════════════════════╝
 
@@ -83,15 +83,25 @@ log("✅ UI OK")
 --//  LOAD ALL FEATURES
 --// ============================================================
 local Features = {
+    -- Combat
     SilentAim = loadModule("features.silentaim"),
-    ESP       = loadModule("features.esp"),
-    Speed     = loadModule("features.speed"),
     Fling     = loadModule("features.fling"),
-    AutoGun   = loadModule("features.autogun"),
-    Noclip    = loadModule("features.noclip"),
-    Animation = loadModule("features.animation"),
-    AutoFarm  = loadModule("features.autofarm"),
     Murderer  = loadModule("features.murderer"),
+    AutoFarm  = loadModule("features.autofarm"),
+
+    -- Visual
+    ESP       = loadModule("features.esp"),
+    FOV       = loadModule("features.fov"),
+
+    -- Movement
+    Speed     = loadModule("features.speed"),
+    Noclip    = loadModule("features.noclip"),
+    AutoGun   = loadModule("features.autogun"),
+    Fly       = loadModule("features.fly"),
+    InfJump   = loadModule("features.infjump"),
+
+    -- Other
+    Animation = loadModule("features.animation"),
 }
 
 --// ============================================================
@@ -99,14 +109,17 @@ local Features = {
 --// ============================================================
 log("─────────────────────────────")
 log("SilentAim: "  .. type(Features.SilentAim))
-log("ESP: "        .. type(Features.ESP))
-log("Speed: "      .. type(Features.Speed))
 log("Fling: "      .. type(Features.Fling))
-log("AutoGun: "    .. type(Features.AutoGun))
-log("Noclip: "     .. type(Features.Noclip))
-log("Animation: "  .. type(Features.Animation))
-log("AutoFarm: "   .. type(Features.AutoFarm))
 log("Murderer: "   .. type(Features.Murderer))
+log("AutoFarm: "   .. type(Features.AutoFarm))
+log("ESP: "        .. type(Features.ESP))
+log("FOV: "        .. type(Features.FOV))
+log("Speed: "      .. type(Features.Speed))
+log("Noclip: "     .. type(Features.Noclip))
+log("AutoGun: "    .. type(Features.AutoGun))
+log("Fly: "        .. type(Features.Fly))
+log("InfJump: "    .. type(Features.InfJump))
+log("Animation: "  .. type(Features.Animation))
 log("─────────────────────────────")
 
 -- Make Features global for debugging
@@ -127,4 +140,4 @@ end
 
 log("✅ UI INIT OK")
 log("=== ГОТОВО ===")
-notify("TrustHub v5.0", "Завантажено! F4 — меню", 5)
+notify("TrustHub v6.0", "Завантажено! F4 — меню", 5)

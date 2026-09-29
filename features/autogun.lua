@@ -1,6 +1,6 @@
 --// ╔══════════════════════════════════════════════════════════════╗
---// ║  TrustHub Auto Gun v6.0                                      ║
---// ║  Fast TP • Instant Pickup • Instant Return                   ║
+--// ║  TrustHub Auto Gun v7.0 — Optimized Edition                  ║
+--// ║  Throttled scan • Fast TP • No lag                           ║
 --// ╚══════════════════════════════════════════════════════════════╝
 
 local Players    = game:GetService("Players")
@@ -14,9 +14,9 @@ local LocalPlayer = Players.LocalPlayer
 --// ============================================================
 local Config = {
     Enabled       = false,
-    MaxDistance   = 3000,
-    PickupWait    = 0.05,       -- затримка на 1 кадр (швидко)
-    Cooldown      = 0.5,        -- перезарядка між спробами
+    ScanRate      = 0.5,       -- ⚡ скануємо раз на 0.5с (не кожен кадр!)
+    MaxDistance   = 5000,
+    Cooldown      = 1.0,
     LogEnabled    = true,
     NotifyEnabled = true,
 }
@@ -27,6 +27,8 @@ local Config = {
 local enabled = false
 local busy = false
 local lastAttempt = 0
+local lastScan = 0
+local cachedGun = nil   -- кеш цілі
 local loopConn = nil
 
 --// ============================================================
@@ -58,103 +60,68 @@ end
 --// ============================================================
 --//  GUN DETECTION
 --// ============================================================
-local GUN_KEYWORDS = {
-    "gun", "pistol", "sheriff", "revolver", "magnum",
-    "weapon", "shoot", "handgun"
-}
-
-local function isGunName(name)
-    local n = name:lower()
-    for _, kw in ipairs(GUN_KEYWORDS) do
-        if n:find(kw) then return true end
-    end
-    return false
-end
-
-local function isGunTool(obj)
-    if not obj or not obj.Parent then return false end
-    if not obj:IsA("Tool") then return false end
-    return isGunName(obj.Name)
-end
-
 local function isGunDrop(obj)
     if not obj or not obj.Parent then return false end
     if not obj:IsA("BasePart") then return false end
-    return obj.Name:lower():find("gundrop")
+    local n = obj.Name:lower()
+    return n == "gundrop" or n:find("gundrop")
 end
 
 --// ============================================================
---//  FIND GUN
+--//  SCAN FOR GUNDROP (throttled)
 --// ============================================================
-local function findBestGun()
+local function scanForGun()
     local char, hum, hrp = getChar()
-    if not hrp then return nil, nil end
+    if not hrp then return nil end
 
-    -- Вже тримаємо пістолет?
+    -- Вже тримаємо пістолет — не шукаємо
     local current = char:FindFirstChildWhichIsA("Tool")
-    if current and isGunTool(current) then
-        return nil, nil
+    if current then
+        local n = current.Name:lower()
+        if n:find("gun") or n:find("pistol") or n:find("sheriff") then
+            return nil
+        end
     end
 
-    local bestTool, bestDrop = nil, nil
-    local bestDist = math.huge
+    -- Шукаємо тільки в Workspace (не в GetDescendants — швидше)
+    local best, bestDist = nil, math.huge
 
-    -- 1. Шукаємо GunDrop (найчастіше в MM2)
-    for _, obj in ipairs(workspace:GetDescendants()) do
+    for _, obj in ipairs(workspace:GetChildren()) do
         if isGunDrop(obj) then
             local dist = (hrp.Position - obj.Position).Magnitude
-            if dist < bestDist and dist <= Config.MaxDistance then
+            if dist < bestDist then
                 bestDist = dist
-                bestDrop = obj
+                best = obj
             end
         end
     end
 
-    -- 2. Шукаємо Tool на землі (якщо гра так дропає)
-    if not bestTool and not bestDrop then
-        for _, obj in ipairs(workspace:GetDescendants()) do
-            if isGunTool(obj) then
-                local holder = Players:GetPlayerFromCharacter(obj.Parent)
-                if not holder then
-                    local handle = obj:FindFirstChild("Handle")
-                    if handle then
-                        local dist = (hrp.Position - handle.Position).Magnitude
-                        if dist < bestDist and dist <= Config.MaxDistance then
-                            bestDist = dist
-                            bestTool = obj
-                        end
+    -- Також шукаємо в моделях
+    for _, obj in ipairs(workspace:GetChildren()) do
+        if obj:IsA("Model") then
+            for _, child in ipairs(obj:GetChildren()) do
+                if isGunDrop(child) then
+                    local dist = (hrp.Position - child.Position).Magnitude
+                    if dist < bestDist then
+                        bestDist = dist
+                        best = child
                     end
                 end
             end
         end
     end
 
-    return bestTool, bestDrop
+    if best and bestDist <= Config.MaxDistance then
+        return best
+    end
+    return nil
 end
 
 --// ============================================================
---//  PICKUP TOOL (fallback)
+--//  FAST GRAB
 --// ============================================================
-local function tryPickupTool(tool)
-    local char, hum = getChar()
-    if not char or not hum then return false end
-
-    local ok = pcall(function()
-        hum:EquipTool(tool)
-    end)
-    if ok then return true end
-
-    pcall(function()
-        tool.Parent = char
-    end)
-    return true
-end
-
---// ============================================================
---//  FAST GRAB — TP → Pickup → Return (миттєво)
---// ============================================================
-local function fastGrab()
-    if busy then return end
+local function fastGrab(gun)
+    if busy or not gun or not gun.Parent then return end
     local now = tick()
     if now - lastAttempt < Config.Cooldown then return end
     lastAttempt = now
@@ -166,82 +133,49 @@ local function fastGrab()
         return
     end
 
-    local tool, drop = findBestGun()
-    if not tool and not drop then
-        busy = false
-        return
-    end
-
-    -- ⚡ ЗБЕРІГАЄМО ОРИГІНАЛЬНУ ПОЗИЦІЮ (включно з обертанням)
+    -- Зберігаємо оригінальну позицію
     local originalCFrame = hrp.CFrame
     local originalVelocity = hrp.AssemblyLinearVelocity
 
-    -- Знаходимо позицію цілі
-    local targetPos
-    if drop then
-        targetPos = drop.Position
-    elseif tool then
-        local handle = tool:FindFirstChild("Handle")
-        if handle then
-            targetPos = handle.Position
-        else
-            busy = false
-            return
-        end
-    end
-
-    if not targetPos then
-        busy = false
-        return
-    end
-
-    -- ⚡ ТЕЛЕПОРТ ДО ПІСТОЛЕТА (миттєво)
-    hrp.CFrame = CFrame.new(targetPos + Vector3.new(0, 1, 0))
+    -- Телепорт до GunDrop
+    hrp.CFrame = CFrame.new(gun.Position + Vector3.new(0, 2, 0))
     hrp.AssemblyLinearVelocity = Vector3.zero
 
-    -- ⚡ ЧЕКАЄМО 1 КАДР
-    task.wait(Config.PickupWait)
+    -- Чекаємо 1-2 кадри
+    task.wait(0.05)
 
-    -- ⚡ ПІДБИРАЄМО
-    if tool then
-        tryPickupTool(tool)
-    end
-    -- Якщо drop — гра сама підбирає через дотик
+    -- Гра сама підбирає GunDrop через дотик
 
-    -- ⚡ ПОВЕРТАЄМОСЬ НАЗАД (миттєво)
+    -- Повертаємось назад
     local newChar, newHum, newHrp = getChar()
     if newHrp then
         newHrp.CFrame = originalCFrame
         newHrp.AssemblyLinearVelocity = originalVelocity
     end
 
-    if tool then
-        log("Picked: " .. tool.Name)
-        notify("🔫 Auto Gun", "Picked: " .. tool.Name, 2)
-    elseif drop then
-        log("Grabbed GunDrop")
-        notify("🔫 Auto Gun", "Grabbed GunDrop", 2)
-    end
+    log("Grabbed GunDrop")
+    notify("🔫 Auto Gun", "Grabbed gun", 2)
 
     busy = false
 end
 
 --// ============================================================
---//  MAIN LOOP
+--//  MAIN LOOP (throttled — не кожен кадр!)
 --// ============================================================
 local function startLoop()
     if loopConn then loopConn:Disconnect() end
 
     loopConn = RunService.Heartbeat:Connect(function()
-        if not enabled then return end
-        if busy then return end
+        if not enabled or busy then return end
 
-        local char, hum, hrp = getChar()
-        if not hrp then return end
+        local now = tick()
+        if now - lastScan < Config.ScanRate then return end
+        lastScan = now
 
-        local tool, drop = findBestGun()
-        if tool or drop then
-            task.spawn(fastGrab)
+        -- Скануємо тільки раз на ScanRate
+        local gun = scanForGun()
+        if gun then
+            task.spawn(fastGrab, gun)
         end
     end)
 end
@@ -249,16 +183,6 @@ end
 local function stopLoop()
     if loopConn then loopConn:Disconnect(); loopConn = nil end
 end
-
---// ============================================================
---//  CHARACTER RESPAWN
---// ============================================================
-LocalPlayer.CharacterAdded:Connect(function()
-    if enabled then
-        task.wait(1)
-        busy = false
-    end
-end)
 
 --// ============================================================
 --//  MODULE
@@ -274,11 +198,12 @@ function AutoGun:setEnabled(state)
     enabled = state
     Config.Enabled = state
     busy = false
+    cachedGun = nil
 
     if state then
         startLoop()
-        log("═══ Auto Gun ENABLED ═══")
-        notify("🔫 Auto Gun", "Enabled (Fast TP)", 2)
+        log("═══ Auto Gun ENABLED (scan: " .. Config.ScanRate .. "s) ═══")
+        notify("🔫 Auto Gun", "Enabled", 2)
     else
         stopLoop()
         log("Auto Gun DISABLED")
@@ -292,8 +217,17 @@ function AutoGun:setNotify(v) Config.NotifyEnabled = v end
 function AutoGun:setInstantPickup(v) end
 function AutoGun:setAutoEquip(v) end
 
+LocalPlayer.CharacterAdded:Connect(function()
+    if enabled then
+        task.wait(1)
+        busy = false
+        cachedGun = nil
+    end
+end)
+
 log("═══════════════════════════════════")
-log("TrustHub Auto Gun v6.0 (Fast TP)")
+log("TrustHub Auto Gun v7.0 (Optimized)")
+log("Scan rate: " .. Config.ScanRate .. "s")
 log("═══════════════════════════════════")
 
 return AutoGun.new()

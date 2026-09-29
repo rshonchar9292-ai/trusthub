@@ -1,7 +1,7 @@
---// ╔══════════════════════════════════════════════════════════╗
---// ║  TrustHub - Loader v4.0                                  ║
---// ║  Author: rshonchar9292-ai                                ║
---// ╚══════════════════════════════════════════════════════════╝
+--// ╔══════════════════════════════════════════════════════════════╗
+--// ║  TrustHub - Loader v5.0                                      ║
+--// ║  Author: rshonchar9292-ai                                    ║
+--// ╚══════════════════════════════════════════════════════════════╝
 
 local BASE_URL = "https://raw.githubusercontent.com/rshonchar9292-ai/trusthub/main/"
 
@@ -28,40 +28,40 @@ end
 local function loadModule(path)
     local urlPath = path:gsub("%.", "/")
     local url = BASE_URL .. urlPath .. ".lua"
-    
+
     log("Завантажую: " .. urlPath)
-    
+
     local ok, code = pcall(function()
         return game:HttpGet(url)
     end)
-    
+
     if not ok then
         log("❌ HTTP FAIL: " .. urlPath)
         return nil
     end
-    
+
     if not code or #code < 10 then
         log("❌ ПУСТИЙ КОД: " .. urlPath)
         return nil
     end
-    
+
     if code:find("404: Not Found") then
         log("❌ 404: " .. urlPath)
         return nil
     end
-    
+
     local fn, err = loadstring(code)
     if not fn then
         log("❌ COMPILE FAIL: " .. urlPath .. " → " .. tostring(err))
         return nil
     end
-    
+
     local ok2, result = pcall(fn)
     if not ok2 then
         log("❌ RUN FAIL: " .. urlPath .. " → " .. tostring(result))
         return nil
     end
-    
+
     log("✅ OK: " .. urlPath .. " → " .. type(result))
     return result
 end
@@ -90,8 +90,14 @@ local Features = {
     AutoGun   = loadModule("features.autogun"),
     Noclip    = loadModule("features.noclip"),
     Animation = loadModule("features.animation"),
+    AutoFarm  = loadModule("features.autofarm"),
+    Murderer  = loadModule("features.murderer"),
 }
 
+--// ============================================================
+--//  LOG FEATURES STATUS
+--// ============================================================
+log("─────────────────────────────")
 log("SilentAim: "  .. type(Features.SilentAim))
 log("ESP: "        .. type(Features.ESP))
 log("Speed: "      .. type(Features.Speed))
@@ -99,6 +105,9 @@ log("Fling: "      .. type(Features.Fling))
 log("AutoGun: "    .. type(Features.AutoGun))
 log("Noclip: "     .. type(Features.Noclip))
 log("Animation: "  .. type(Features.Animation))
+log("AutoFarm: "   .. type(Features.AutoFarm))
+log("Murderer: "   .. type(Features.Murderer))
+log("─────────────────────────────")
 
 -- Make Features global for debugging
 _G.TrustHubFeatures = Features
@@ -118,4 +127,4 @@ end
 
 log("✅ UI INIT OK")
 log("=== ГОТОВО ===")
-notify("TrustHub v4.0", "Завантажено! F4 — меню", 5)
+notify("TrustHub v5.0", "Завантажено! F4 — меню", 5)

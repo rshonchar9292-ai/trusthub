@@ -1,5 +1,5 @@
 --// ==================================================
---// TrustHub UI v12.0 — 7 tabs, Silent Aim toggle
+--// TrustHub UI v13.0 — 7 tabs + Anti-Fling
 --// ==================================================
 
 local TweenService     = game:GetService("TweenService")
@@ -465,7 +465,7 @@ function UI:init(Features)
     VersionLbl.Size = UDim2.new(0, 60, 1, 0)
     VersionLbl.Position = UDim2.new(1, -100, 0, 0)
     VersionLbl.BackgroundTransparency = 1
-    VersionLbl.Text = "v12.0"
+    VersionLbl.Text = "v13.0"
     VersionLbl.TextColor3 = Theme.TextDim
     VersionLbl.Font = Enum.Font.Gotham
     VersionLbl.TextSize = 11
@@ -857,6 +857,29 @@ function UI:init(Features)
     infjInfo.TextXAlignment = Enum.TextXAlignment.Left
     infjInfo.Parent = MovePage
 
+    --// ANTI-FLING (нове)
+    createSection(MovePage, "🛡 Anti-Fling")
+
+    createToggle(MovePage, "Enable Anti-Fling", false, function(v)
+        if Features.AntiFling then Features.AntiFling:setEnabled(v) end
+    end)
+
+    createSlider(MovePage, "Max Velocity", 50, 800, 220, function(v)
+        if Features.AntiFling and Features.AntiFling.setLimit then 
+            Features.AntiFling:setLimit(v) 
+        end
+    end)
+
+    local afInfo = Instance.new("TextLabel")
+    afInfo.Size = UDim2.new(1, -16, 0, 30)
+    afInfo.BackgroundTransparency = 1
+    afInfo.Text = "Stops sudden speed spikes from launching you"
+    afInfo.TextColor3 = Theme.TextDim
+    afInfo.Font = Enum.Font.Gotham
+    afInfo.TextSize = 11
+    afInfo.TextXAlignment = Enum.TextXAlignment.Left
+    afInfo.Parent = MovePage
+
     -- NOCLIP
     createSection(MovePage, "Noclip")
     createToggle(MovePage, "Enable Noclip", false, function(v)
@@ -1047,7 +1070,7 @@ function UI:init(Features)
     infoText.Size = UDim2.new(1, -20, 1, 0)
     infoText.Position = UDim2.new(0, 10, 0, 0)
     infoText.BackgroundTransparency = 1
-    infoText.Text = "TrustHub v12.0\n\nF4  — toggle menu\n\nTabs:\nAimbot | Murderer | Fling | Visuals | Movement | Animation | Settings"
+    infoText.Text = "TrustHub v13.0\n\nF4  — toggle menu\n\nTabs:\nAimbot | Murderer | Fling | Visuals | Movement | Animation | Settings"
     infoText.TextColor3 = Theme.TextDim
     infoText.Font = Enum.Font.Gotham
     infoText.TextSize = 12

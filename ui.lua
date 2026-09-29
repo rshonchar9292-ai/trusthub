@@ -1,5 +1,5 @@
 --// ==================================================
---// TrustHub UI v8.0 — 6 tabs + AutoFarm
+--// TrustHub UI v9.0 — 6 tabs + Kill All
 --// ==================================================
 
 local TweenService     = game:GetService("TweenService")
@@ -465,7 +465,7 @@ function UI:init(Features)
     VersionLbl.Size = UDim2.new(0, 60, 1, 0)
     VersionLbl.Position = UDim2.new(1, -100, 0, 0)
     VersionLbl.BackgroundTransparency = 1
-    VersionLbl.Text = "v8.0"
+    VersionLbl.Text = "v9.0"
     VersionLbl.TextColor3 = Theme.TextDim
     VersionLbl.Font = Enum.Font.Gotham
     VersionLbl.TextSize = 11
@@ -682,16 +682,11 @@ function UI:init(Features)
         for _, child in ipairs(playerListScroll:GetChildren()) do
             if child:IsA("TextButton") then child:Destroy() end
         end
-
         if not Features.Fling or not Features.Fling.getPlayersWithRoles then return end
-
         local list = Features.Fling:getPlayersWithRoles()
         for _, data in ipairs(list) do
             createPlayerRow(
-                playerListScroll,
-                data.player,
-                data.role,
-                data.color,
+                playerListScroll, data.player, data.role, data.color,
                 function(plr)
                     if Features.Fling then Features.Fling:flingPlayer(plr) end
                 end
@@ -741,14 +736,12 @@ function UI:init(Features)
 
     -- NOCLIP
     createSection(MovePage, "Noclip")
-
     createToggle(MovePage, "Enable Noclip", false, function(v)
         if Features.Noclip then Features.Noclip:setEnabled(v) end
     end)
 
     -- AUTO GUN
     createSection(MovePage, "Auto Gun")
-
     createToggle(MovePage, "Auto Pickup Gun", false, function(v)
         if Features.AutoGun then Features.AutoGun:setEnabled(v) end
     end)
@@ -760,15 +753,15 @@ function UI:init(Features)
         if Features.AutoFarm then Features.AutoFarm:setEnabled(v) end
     end)
 
-    createSlider(MovePage, "Farm Speed", 20, 200, 60, function(v)
-        if Features.AutoFarm and Features.AutoFarm.setFlySpeed then 
-            Features.AutoFarm:setFlySpeed(v) 
+    createSlider(MovePage, "Fly Speed", 5, 100, 22, function(v)
+        if Features.AutoFarm and Features.AutoFarm.setSpeed then 
+            Features.AutoFarm:setSpeed(v) 
         end
     end)
 
-    createSlider(MovePage, "Farm Range", 50, 2000, 500, function(v)
-        if Features.AutoFarm and Features.AutoFarm.setMaxDistance then 
-            Features.AutoFarm:setMaxDistance(v) 
+    createToggle(MovePage, "Auto Fling Murderer", true, function(v)
+        if Features.AutoFarm and Features.AutoFarm.setAutoFling then 
+            Features.AutoFarm:setAutoFling(v) 
         end
     end)
 
@@ -788,13 +781,47 @@ function UI:init(Features)
     farmInfo.TextXAlignment = Enum.TextXAlignment.Left
     farmInfo.Parent = MovePage
 
+    -- AUTO KILL MURDERER
+    createSection(MovePage, "💥 Auto Kill Murderer")
+
+    createToggle(MovePage, "Enable Auto Kill Murder", false, function(v)
+        if Features.AutoFarm and Features.AutoFarm.setAutoKill then 
+            Features.AutoFarm:setAutoKill(v) 
+        end
+    end)
+
+    createSlider(MovePage, "Kill Delay (sec)", 1, 10, 3, function(v)
+        if Features.AutoFarm and Features.AutoFarm.setKillDelay then 
+            Features.AutoFarm:setKillDelay(v) 
+        end
+    end)
+
+    -- 💀 KILL ALL
+    createSection(MovePage, "💀 Kill All (Murderer Only)")
+
+    createActionButton(MovePage, "💀 KILL ALL NOW", Color3.fromRGB(200, 30, 30), function()
+        if Features.AutoFarm and Features.AutoFarm.killAll then 
+            Features.AutoFarm:killAll() 
+        end
+    end)
+
+    local killAllInfo = Instance.new("TextLabel")
+    killAllInfo.Size = UDim2.new(1, -16, 0, 50)
+    killAllInfo.BackgroundTransparency = 1
+    killAllInfo.Text = "⚠ Works ONLY as Murderer (with knife)\nAttacks all players with knife remote"
+    killAllInfo.TextColor3 = Color3.fromRGB(255, 150, 100)
+    killAllInfo.Font = Enum.Font.Gotham
+    killAllInfo.TextSize = 11
+    killAllInfo.TextXAlignment = Enum.TextXAlignment.Left
+    killAllInfo.TextYAlignment = Enum.TextYAlignment.Top
+    killAllInfo.TextWrapped = true
+    killAllInfo.Parent = MovePage
+
     -- SPEED
     createSection(MovePage, "Speed")
-
     createToggle(MovePage, "Enable Speed", false, function(v)
         if Features.Speed then Features.Speed:setEnabled(v) end
     end)
-
     createSlider(MovePage, "Speed Value", 16, 200, 32, function(v)
         if Features.Speed and Features.Speed.setValue then 
             Features.Speed:setValue(v) 
@@ -802,7 +829,7 @@ function UI:init(Features)
     end)
 
     --// ==================================================
-    --// ANIMATION TAB (R15 sets only)
+    --// ANIMATION TAB
     --// ==================================================
     createSection(AnimationPage, "R15 Animation Sets")
 
@@ -930,7 +957,7 @@ function UI:init(Features)
     infoText.Size = UDim2.new(1, -20, 1, 0)
     infoText.Position = UDim2.new(0, 10, 0, 0)
     infoText.BackgroundTransparency = 1
-    infoText.Text = "TrustHub v8.0\n\nF4  — toggle menu\nT   — open/close\nC   — toggle Silent Aim\n\nTabs:\nAimbot | Fling | Visuals | Movement | Animation | Settings"
+    infoText.Text = "TrustHub v9.0\n\nF4  — toggle menu\nT   — open/close\nC   — toggle Silent Aim\n\nTabs:\nAimbot | Fling | Visuals | Movement | Animation | Settings"
     infoText.TextColor3 = Theme.TextDim
     infoText.Font = Enum.Font.Gotham
     infoText.TextSize = 12

@@ -1,5 +1,6 @@
 --// ╔══════════════════════════════════════════════════════════════╗
---// ║  TrustHub Auto Farm v6.0 — Smooth BodyVelocity Edition        ║
+--// ║  TrustHub Auto Farm v7.0 — Smooth Fly                        ║
+--// ║  AlignPosition + AlignOrientation (no jitter)                ║
 --// ╚══════════════════════════════════════════════════════════════╝
 
 local Players    = game:GetService("Players")
@@ -9,13 +10,13 @@ local StarterGui = game:GetService("StarterGui")
 local LocalPlayer = Players.LocalPlayer
 
 --// FIXED CONFIG
-local FLY_SPEED      = 22
-local UPDATE_RATE    = 0.15        -- повільніше оновлення (менше лагів)
-local AUTO_FLING     = true
-local FLING_DELAY    = 1.0
-local ANTI_MURDERER  = true
-local DANGER_RANGE   = 35
-local LOG_ENABLED    = true
+local FLY_SPEED     = 22
+local UPDATE_RATE   = 0.15
+local AUTO_FLING    = true
+local FLING_DELAY   = 1.0
+local ANTI_MURDERER = true
+local DANGER_RANGE  = 35
+local LOG_ENABLED   = true
 
 local enabled = false
 local currentTarget = nil
@@ -25,8 +26,11 @@ local totalCoinsCollected = 0
 local roundStartTime = 0
 local flingInProgress = false
 
-local bodyVelocity = nil
-local bodyGyro = nil
+-- Align objects
+local alignPos = nil
+local alignOrient = nil
+local attachPos = nil
+local attachOrient = nil
 local noclipConn = nil
 local mainLoopConn = nil
 local deathCheckConn = nil
@@ -53,7 +57,7 @@ local function getChar()
     return char, hum, hrp
 end
 
---// ROLE
+--// ROLE DETECTION
 local function getRole(player)
     if not player or not player.Character then return "Dead" end
     local char = player.Character
@@ -162,43 +166,74 @@ local function disableNoclip()
     end
 end
 
---// FLY SETUP (BodyVelocity — плавний рух)
+--// SMOOTH FLY SETUP (AlignPosition + AlignOrientation)
 local function setupFly()
     local char, hum, hrp = getChar()
     if not hrp then return false end
 
+    -- Відключаємо гравітацію та контроль персонажа
     if hum then
-        pcall(function() hum.PlatformStand = true end)
+        pcall(function()
+            hum.PlatformStand = true
+            hum:ChangeState(Enum.HumanoidStateType.Physics)
+        end)
     end
 
-    if bodyVelocity then bodyVelocity:Destroy() end
-    if bodyGyro then bodyGyro:Destroy() end
+    -- Очищуємо старі об'єкти
+    if alignPos then alignPos:Destroy() end
+    if alignOrient then alignOrient:Destroy() end
+    if attachPos then attachPos:Destroy() end
+    if attachOrient then attachOrient:Destroy() end
 
-    bodyVelocity = Instance.new("BodyVelocity")
-    bodyVelocity.Name = "AutoFarmFly"
-    bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-    bodyVelocity.Velocity = Vector3.zero
-    bodyVelocity.P = 5000                    -- нижче = плавніше
-    bodyVelocity.Parent = hrp
+    -- AlignPosition — плавний рух до цілі
+    attachPos = Instance.new("Attachment")
+    attachPos.Name = "AutoFarmPos"
+    attachPos.Parent = hrp
 
-    bodyGyro = Instance.new("BodyGyro")
-    bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-    bodyGyro.P = 5000
-    bodyGyro.D = 500
-    bodyGyro.CFrame = hrp.CFrame
-    bodyGyro.Parent = hrp
+    alignPos = Instance.new("AlignPosition")
+    alignPos.Mode = Enum.PositionAlignmentMode.OneAttachment
+    alignPos.Attachment0 = attachPos
+    alignPos.Position = hrp.Position
+    alignPos.MaxForce = 100000
+    alignPos.Responsiveness = 50        -- плавність (менше = плавніше)
+    alignPos.ApplyAtCenterOfMass = false
+    alignPos.Parent = hrp
 
-    log("Fly setup done")
+    -- AlignOrientation — тримає вертикально
+    attachOrient = Instance.new("Attachment")
+    attachOrient.Name = "AutoFarmOrient"
+    attachOrient.Parent = hrp
+
+    alignOrient = Instance.new("AlignOrientation")
+    alignOrient.Mode = Enum.OrientationAlignmentMode.OneAttachment
+    alignOrient.Attachment0 = attachOrient
+    alignOrient.CFrame = CFrame.new()
+    alignOrient.MaxTorque = 100000
+    alignOrient.Responsiveness = 50
+    alignOrient.Parent = hrp
+
+    -- Ставимо поточну позицію як ціль (щоб не смикнуло)
+    alignPos.Position = hrp.Position
+
+    log("Fly setup done (AlignPosition)")
     return true
 end
 
 local function stopFly()
-    if bodyVelocity then bodyVelocity:Destroy(); bodyVelocity = nil end
-    if bodyGyro then bodyGyro:Destroy(); bodyGyro = nil end
+    if alignPos then alignPos:Destroy(); alignPos = nil end
+    if alignOrient then alignOrient:Destroy(); alignOrient = nil end
+    if attachPos then attachPos:Destroy(); attachPos = nil end
+    if attachOrient then attachOrient:Destroy(); attachOrient = nil end
+
     local char = LocalPlayer.Character
     if char then
         local hum = char:FindFirstChildOfClass("Humanoid")
-        if hum then pcall(function() hum.PlatformStand = false end) end
+        if hum then
+            pcall(function()
+                hum.PlatformStand = false
+                hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+            end)
+        end
     end
 end
 
@@ -214,7 +249,7 @@ local function shouldEscapeFromMurderer()
     return (hrp.Position - mHrp.Position).Magnitude <= DANGER_RANGE
 end
 
---// SKIDFLING
+--// SKIDFLING (без змін)
 local function SkidFling(TargetPlayer, duration)
     if not TargetPlayer or TargetPlayer == LocalPlayer then return false end
     if not TargetPlayer.Character then return false end
@@ -359,7 +394,7 @@ local function startDeathCheck()
     end)
 end
 
---// MAIN LOOP — BodyVelocity (плавний рух)
+--// MAIN LOOP — AlignPosition (плавний рух)
 local coinCheckTimer = 0
 
 local function startMainLoop()
@@ -374,11 +409,11 @@ local function startMainLoop()
         -- Anti-Murderer
         if shouldEscapeFromMurderer() then
             local murderer = findMurderer()
-            if murderer and murderer.Character and bodyVelocity then
+            if murderer and murderer.Character and alignPos then
                 local mHrp = murderer.Character:FindFirstChild("HumanoidRootPart")
                 if mHrp then
                     local escapeDir = (hrp.Position - mHrp.Position).Unit
-                    bodyVelocity.Velocity = escapeDir * FLY_SPEED * 3
+                    alignPos.Position = hrp.Position + escapeDir * 200
                 end
             end
             return
@@ -389,31 +424,26 @@ local function startMainLoop()
         if coinCheckTimer > 3 then
             coinCheckTimer = 0
             if countAllCoins() == 0 and AUTO_FLING and not flingInProgress then
-                log("All coins collected")
                 task.spawn(autoFlingMurderer)
                 return
             end
         end
 
-        -- Оновлення цілі (рідше = менше лагів)
+        -- Оновлення цілі
         local now = tick()
         if now - lastTargetUpdate > UPDATE_RATE or not currentTarget or not currentTarget.Parent then
             lastTargetUpdate = now
             currentTarget = findNearestCoin()
         end
 
-        -- Рух через BodyVelocity (плавний)
-        if currentTarget and bodyVelocity then
+        -- Плавний рух через AlignPosition
+        if currentTarget and alignPos then
             local pos = getCoinPosition(currentTarget)
             if pos then
-                local direction = pos - hrp.Position
-                local dist = direction.Magnitude
-
+                local dist = (hrp.Position - pos).Magnitude
                 if dist > 2 then
-                    -- Плавно летимо (Speed = 22 studs/s)
-                    bodyVelocity.Velocity = direction.Unit * FLY_SPEED
+                    alignPos.Position = pos
                 else
-                    bodyVelocity.Velocity = Vector3.zero
                     if not collectedCoins[currentTarget] then
                         collectedCoins[currentTarget] = true
                         totalCoinsCollected = totalCoinsCollected + 1
@@ -423,8 +453,6 @@ local function startMainLoop()
             else
                 currentTarget = nil
             end
-        elseif bodyVelocity then
-            bodyVelocity.Velocity = Vector3.zero
         end
     end)
 end
@@ -463,7 +491,7 @@ function AutoFarm:setEnabled(state)
         setupFly()
         startMainLoop()
         startDeathCheck()
-        log("═══ Auto Farm ENABLED (Speed: " .. FLY_SPEED .. ") ═══")
+        log("═══ Auto Farm ENABLED (Smooth, Speed: " .. FLY_SPEED .. ") ═══")
         notify("💰 Auto Farm", "Enabled (Smooth)", 3)
     else
         stopMainLoop()
@@ -488,7 +516,7 @@ function AutoFarm:getStats()
 end
 
 log("═══════════════════════════════════")
-log("TrustHub Auto Farm v6.0 (Smooth)")
+log("TrustHub Auto Farm v7.0 (Smooth)")
 log("═══════════════════════════════════")
 
 return AutoFarm.new()

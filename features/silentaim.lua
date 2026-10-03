@@ -1,6 +1,6 @@
 --// ╔══════════════════════════════════════════════════════════════╗
---// ║  TrustHub Silent Aim — MM2 Edition                           ║
---// ║  Exact method from working reference (Fling Gui V35.0)       ║
+--// ║  TrustHub Silent Aim — MM2 Real Edition                      ║
+--// ║  Hook: RemoteEvent "Shoot" via FireServer                    ║
 --// ╚══════════════════════════════════════════════════════════════╝
 
 local Players    = game:GetService("Players")
@@ -13,9 +13,9 @@ local LocalPlayer = Players.LocalPlayer
 --// ============================================================
 local Config = {
     Enabled    = false,
-    Prediction = 40,        -- velocity / 40 (як у референсі)
-    TeamCheck  = true,
+    Prediction = 40,
     LogEnabled = true,
+    DebugAll   = false,   -- true = логувати ВСІ виклики
 }
 
 --// ============================================================
@@ -34,9 +34,7 @@ local shots = 0
 --//  LOG / NOTIFY
 --// ============================================================
 local function log(msg)
-    if Config.LogEnabled then
-        print("[SilentAim] " .. tostring(msg))
-    end
+    if Config.LogEnabled then print("[SilentAim] " .. tostring(msg)) end
 end
 
 local function notify(title, text, duration)
@@ -57,11 +55,11 @@ local function isAlive(plr)
 end
 
 --// ============================================================
---//  ROLE TRACKING (як у референсі — через Backpack.ChildAdded)
+--//  ROLE TRACKING
 --// ============================================================
-local function checkWeapon(child)
-    if not child:IsA("Tool") then return end
-    local n = child.Name:lower()
+local function getRoleFromTool(tool)
+    if not tool:IsA("Tool") then return nil end
+    local n = tool.Name:lower()
     if n:find("knife") or n:find("blade") or n:find("murder") then
         return "Murderer"
     elseif n:find("gun") or n:find("pistol") or n:find("sheriff") then
@@ -73,44 +71,43 @@ end
 local function trackPlayer(plr)
     if plr == LocalPlayer then return end
 
-    local function attach(char)
-        if not char then return end
-
-        -- Backpack
-        local bp = plr:FindFirstChild("Backpack")
-        if bp then
-            for _, tool in ipairs(bp:GetChildren()) do
-                local role = checkWeapon(tool)
-                if role == "Murderer" then
+    local function scanContainer(container)
+        if not container then return end
+        for _, tool in ipairs(container:GetChildren()) do
+            local role = getRoleFromTool(tool)
+            if role == "Murderer" then
+                if Roles.Murderer ~= plr then
                     Roles.Murderer = plr
                     log("🎯 Murderer: " .. plr.Name)
-                elseif role == "Sheriff" then
-                    Roles.Sheriff = plr
                 end
-            end
-            bp.ChildAdded:Connect(function(child)
-                local role = checkWeapon(child)
-                if role == "Murderer" then
-                    Roles.Murderer = plr
-                    log("🎯 Murderer (backpack): " .. plr.Name)
-                elseif role == "Sheriff" then
-                    Roles.Sheriff = plr
-                end
-            end)
-        end
-
-        -- Character (вже тримає в руках)
-        for _, tool in ipairs(char:GetChildren()) do
-            local role = checkWeapon(tool)
-            if role == "Murderer" then
-                Roles.Murderer = plr
-                log("🎯 Murderer: " .. plr.Name)
             elseif role == "Sheriff" then
                 Roles.Sheriff = plr
             end
         end
+    end
+
+    -- Backpack
+    local bp = plr:FindFirstChild("Backpack")
+    if bp then
+        scanContainer(bp)
+        bp.ChildAdded:Connect(function(child)
+            local role = getRoleFromTool(child)
+            if role == "Murderer" then
+                Roles.Murderer = plr
+                log("🎯 Murderer (backpack): " .. plr.Name)
+            elseif role == "Sheriff" then
+                Roles.Sheriff = plr
+            end
+        end)
+    end
+
+    -- Character
+    if plr.Character then scanContainer(plr.Character) end
+    plr.CharacterAdded:Connect(function(char)
+        task.wait(1)
+        scanContainer(char)
         char.ChildAdded:Connect(function(child)
-            local role = checkWeapon(child)
+            local role = getRoleFromTool(child)
             if role == "Murderer" then
                 Roles.Murderer = plr
                 log("🎯 Murderer (equipped): " .. plr.Name)
@@ -118,15 +115,10 @@ local function trackPlayer(plr)
                 Roles.Sheriff = plr
             end
         end)
-    end
-
-    attach(plr.Character)
-    plr.CharacterAdded:Connect(attach)
+    end)
 end
 
-for _, plr in ipairs(Players:GetPlayers()) do
-    trackPlayer(plr)
-end
+for _, plr in ipairs(Players:GetPlayers()) do trackPlayer(plr) end
 Players.PlayerAdded:Connect(trackPlayer)
 Players.PlayerRemoving:Connect(function(plr)
     if Roles.Murderer == plr then Roles.Murderer = nil end
@@ -134,14 +126,14 @@ Players.PlayerRemoving:Connect(function(plr)
 end)
 
 --// ============================================================
---//  GET MURDERER (fallback якщо кеш порожній)
+--//  GET MURDERER
 --// ============================================================
 local function getMurderer()
     if Roles.Murderer and isAlive(Roles.Murderer) then
         return Roles.Murderer
     end
 
-    -- Fallback — шукаємо самі
+    -- Fallback пошук
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr == LocalPlayer then continue end
         if not isAlive(plr) then continue end
@@ -155,12 +147,11 @@ local function getMurderer()
             end
         end
     end
-
     return nil
 end
 
 --// ============================================================
---//  HOOK __namecall (метод з референсу — getrawmetatable)
+--//  HOOK — FireServer on "Shoot" (пістолет)
 --// ============================================================
 local function hook()
     if hooked then return true end
@@ -181,8 +172,19 @@ local function hook()
                 return oldNamecall(Object, unpack(Arguments))
             end
 
-            -- === SILENT AIM для ShootGun (пістолет) ===
-            if NamecallMethod == "InvokeServer" and tostring(Object) == "ShootGun" then
+            -- Debug — логуємо всі виклики
+            if Config.DebugAll then
+                if NamecallMethod == "FireServer" or NamecallMethod == "InvokeServer" then
+                    print("[DEBUG] " .. NamecallMethod .. " → " .. tostring(Object))
+                    for i, arg in ipairs(Arguments) do
+                        print("    [" .. i .. "] " .. typeof(arg) .. " = " .. tostring(arg))
+                    end
+                end
+            end
+
+            -- === SILENT AIM: RemoteEvent "Shoot" ===
+            -- Об'єкт має бути RemoteEvent з назвою "Shoot"
+            if NamecallMethod == "FireServer" and tostring(Object) == "Shoot" then
                 local success, err2 = pcall(function()
                     local target = getMurderer()
                     if not target or not target.Character then return end
@@ -190,19 +192,33 @@ local function hook()
                     local primaryPart = target.Character.PrimaryPart
                     if not primaryPart then return end
 
+                    -- Перевірка чи є Vector3 в аргументах
+                    local hasVector = false
+                    for _, arg in ipairs(Arguments) do
+                        if typeof(arg) == "Vector3" then
+                            hasVector = true
+                            break
+                        end
+                    end
+                    if not hasVector then return end
+
                     local velocity = primaryPart.AssemblyLinearVelocity
                     local prediction = velocity / Config.Prediction
 
-                    -- Якщо ціль стрибає — скасувати постріл (як у референсі)
+                    -- Якщо ціль стрибає — не стріляти
                     if math.abs(velocity.Y) >= 10 then
                         return "Nullify"
                     end
 
-                    -- ⚡ ПІДМІНА ТОЧКИ ВЛУЧАННЯ (Arguments[2])
-                    Arguments[2] = primaryPart.Position + prediction
-                    shots = shots + 1
+                    -- ⚡ ПІДМІНА ВСІХ Vector3
+                    for i, arg in ipairs(Arguments) do
+                        if typeof(arg) == "Vector3" then
+                            Arguments[i] = primaryPart.Position + prediction
+                        end
+                    end
 
-                    if Config.LogEnabled and shots % 10 == 1 then
+                    shots = shots + 1
+                    if shots % 10 == 1 then
                         log("🎯 Shot #" .. shots .. " → " .. target.Name)
                     end
                 end)
@@ -217,7 +233,7 @@ local function hook()
 
         setreadonly(mt, true)
         hooked = true
-        log("✓ Hook активовано (ShootGun)")
+        log("✓ Hook активовано (Shoot remote)")
     end)
 
     if not ok then
@@ -269,8 +285,9 @@ function SilentAim:setEnabled(state)
     end
 end
 
+function SilentAim:setDebug(v) Config.DebugAll = v end
 function SilentAim:setPrediction(v) Config.Prediction = v end
-function SilentAim:setTeamCheck(v) Config.TeamCheck = v end
+function SilentAim:setTeamCheck(v) end
 function SilentAim:setFOV() end
 function SilentAim:setHitChance() end
 function SilentAim:setWallCheck() end
@@ -292,8 +309,8 @@ function SilentAim:getStats()
 end
 
 log("═══════════════════════════════")
-log("Silent Aim MM2 loaded")
-log("Hook: __namecall → ShootGun")
+log("Silent Aim MM2 — Real Edition")
+log("Hook: FireServer → RemoteEvent 'Shoot'")
 log("Prediction: velocity / " .. Config.Prediction)
 log("═══════════════════════════════")
 

@@ -1,7 +1,7 @@
-\--// ╔══════════════════════════════════════════════════════════════╗
---// ║  TrustHub Silent Aim — MANUAL Mode                           ║
---// ║  Ти стріляєш ЛКМ → хук підмінює позицію                      ║
---// ╚══════════════════════════════════════════════════════════════╝
+--// ============================================================
+--// TrustHub Silent Aim — MANUAL Mode
+--// Ти стріляєш ЛКМ → хук підмінює позицію
+--// ============================================================
 
 local Players    = game:GetService("Players")
 local StarterGui = game:GetService("StarterGui")
@@ -13,7 +13,7 @@ local LocalPlayer = Players.LocalPlayer
 --// ============================================================
 local Config = {
     Enabled      = false,
-    ShootOffset  = 3.5,       -- offset (як у референсі)
+    ShootOffset  = 3.5,
     LogEnabled   = true,
 }
 
@@ -62,21 +62,17 @@ local function findMurderer()
 end
 
 --// ============================================================
---//  CHECK IF LOCAL PLAYER IS SHOOTING THIS REMOTE
+--//  CHECK IF LOCAL PLAYER'S GUN REMOTE
 --// ============================================================
 local function isOurGunRemote(Object)
     if not Object or not Object.Parent then return false end
     if Object.Name ~= "ShootGun" then return false end
     if not Object:IsA("RemoteFunction") then return false end
 
-    -- Перевіряємо чи це наш Gun
     local char = LocalPlayer.Character
     if not char then return false end
 
     local parent = Object.Parent
-    -- Object.Parent має бути KnifeServer
-    -- KnifeServer.Parent має бути Gun
-    -- Gun.Parent має бути Character
     if parent and parent.Name == "KnifeServer" then
         local gun = parent.Parent
         if gun and gun.Name == "Gun" and gun.Parent == char then
@@ -108,7 +104,6 @@ local function hook()
                 return oldNamecall(Object, unpack(Arguments))
             end
 
-            -- === SILENT AIM ===
             if NamecallMethod == "InvokeServer" and isOurGunRemote(Object) then
                 local success, err2 = pcall(function()
                     local murderer = findMurderer()
@@ -118,10 +113,8 @@ local function hook()
                     local hum = murderer.Character:FindFirstChildOfClass("Humanoid")
                     if not hrp or not hum then return end
 
-                    -- Prediction: position + MoveDirection * offset
                     local predicted = hrp.Position + hum.MoveDirection * Config.ShootOffset
 
-                    -- ⚡ ПІДМІНА Arguments[2]
                     Arguments[2] = predicted
                     shots = shots + 1
 

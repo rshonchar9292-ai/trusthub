@@ -1,7 +1,6 @@
---// ╔══════════════════════════════════════════════════════════════╗
---// ║  TrustHub Silent Aim — REAL MM2 METHOD                       ║
---// ║  Hook: Gun.KnifeServer.ShootGun:InvokeServer                 ║
---// ║  Args: [1]=1  [2]=Vector3 position  [3]="AH"                 ║
+\--// ╔══════════════════════════════════════════════════════════════╗
+--// ║  TrustHub Silent Aim — MANUAL Mode                           ║
+--// ║  Ти стріляєш ЛКМ → хук підмінює позицію                      ║
 --// ╚══════════════════════════════════════════════════════════════╝
 
 local Players    = game:GetService("Players")
@@ -14,7 +13,7 @@ local LocalPlayer = Players.LocalPlayer
 --// ============================================================
 local Config = {
     Enabled      = false,
-    ShootOffset  = 3.5,       -- offset як у референсі
+    ShootOffset  = 3.5,       -- offset (як у референсі)
     LogEnabled   = true,
 }
 
@@ -41,7 +40,7 @@ local function notify(title, text, duration)
 end
 
 --// ============================================================
---//  FIND MURDERER (як у референсі)
+--//  FIND MURDERER
 --// ============================================================
 local function findMurderer()
     for _, plr in ipairs(Players:GetPlayers()) do
@@ -63,21 +62,33 @@ local function findMurderer()
 end
 
 --// ============================================================
---//  GET LOCAL GUN REMOTE
+--//  CHECK IF LOCAL PLAYER IS SHOOTING THIS REMOTE
 --// ============================================================
-local function getLocalGunRemote()
+local function isOurGunRemote(Object)
+    if not Object or not Object.Parent then return false end
+    if Object.Name ~= "ShootGun" then return false end
+    if not Object:IsA("RemoteFunction") then return false end
+
+    -- Перевіряємо чи це наш Gun
     local char = LocalPlayer.Character
-    if not char then return nil end
-    local gun = char:FindFirstChild("Gun")
-    if not gun then return nil end
-    local knifeServer = gun:FindFirstChild("KnifeServer")
-    if not knifeServer then return nil end
-    local shootGun = knifeServer:FindFirstChild("ShootGun")
-    return shootGun
+    if not char then return false end
+
+    local parent = Object.Parent
+    -- Object.Parent має бути KnifeServer
+    -- KnifeServer.Parent має бути Gun
+    -- Gun.Parent має бути Character
+    if parent and parent.Name == "KnifeServer" then
+        local gun = parent.Parent
+        if gun and gun.Name == "Gun" and gun.Parent == char then
+            return true
+        end
+    end
+
+    return false
 end
 
 --// ============================================================
---//  HOOK __namecall
+--//  HOOK
 --// ============================================================
 local function hook()
     if hooked then return true end
@@ -98,10 +109,7 @@ local function hook()
             end
 
             -- === SILENT AIM ===
-            -- Об'єкт — це RemoteFunction ShootGun
-            if NamecallMethod == "InvokeServer" 
-               and tostring(Object) == "ShootGun" then
-
+            if NamecallMethod == "InvokeServer" and isOurGunRemote(Object) then
                 local success, err2 = pcall(function()
                     local murderer = findMurderer()
                     if not murderer or not murderer.Character then return end
@@ -117,10 +125,12 @@ local function hook()
                     Arguments[2] = predicted
                     shots = shots + 1
 
-                    if shots % 5 == 1 then
-                        log("🎯 Shot #" .. shots .. " → " .. murderer.Name)
-                    end
+                    log("🎯 Shot #" .. shots .. " → " .. murderer.Name)
                 end)
+
+                if not success then
+                    log("Помилка у хуку: " .. tostring(err2))
+                end
             end
 
             return oldNamecall(Object, unpack(Arguments))
@@ -128,7 +138,7 @@ local function hook()
 
         setreadonly(mt, true)
         hooked = true
-        log("✓ Hook активовано (ShootGun:InvokeServer)")
+        log("✓ Hook активовано (ShootGun manual)")
     end)
 
     if not ok then
@@ -150,60 +160,6 @@ local function unhook()
 end
 
 --// ============================================================
---//  AUTO SHOOT (як у референсі — кожні 0.1s)
---// ============================================================
-local autoShootConn = nil
-
-local function startAutoShoot()
-    if autoShootConn then return end
-
-    autoShootConn = task.spawn(function()
-        while Config.Enabled do
-            task.wait(0.1)
-
-            local murderer = findMurderer()
-            if not murderer or not murderer.Character then continue end
-
-            local char = LocalPlayer.Character
-            if not char then continue end
-
-            local gun = char:FindFirstChild("Gun")
-            if not gun then
-                -- Екіпірувати Gun з Backpack
-                local bp = LocalPlayer:FindFirstChild("Backpack")
-                if bp and bp:FindFirstChild("Gun") then
-                    local hum = char:FindFirstChildOfClass("Humanoid")
-                    if hum then hum:EquipTool(bp.Gun) end
-                end
-                continue
-            end
-
-            local knifeServer = gun:FindFirstChild("KnifeServer")
-            if not knifeServer then continue end
-            local shootGun = knifeServer:FindFirstChild("ShootGun")
-            if not shootGun then continue end
-
-            local hrp = murderer.Character:FindFirstChild("HumanoidRootPart")
-            local hum = murderer.Character:FindFirstChildOfClass("Humanoid")
-            if not hrp or not hum then continue end
-
-            -- Prediction
-            local pos = hrp.Position + hum.MoveDirection * Config.ShootOffset
-
-            -- Виклик remote напряму (без хука)
-            pcall(function()
-                shootGun:InvokeServer(1, pos, "AH")
-                shots = shots + 1
-            end)
-        end
-    end)
-end
-
-local function stopAutoShoot()
-    autoShootConn = nil
-end
-
---// ============================================================
 --//  MODULE
 --// ============================================================
 local SilentAim = {}
@@ -217,12 +173,11 @@ function SilentAim:setEnabled(state)
     Config.Enabled = state
     if state then
         hook()
-        startAutoShoot()
-        log("═══ ENABLED ═══")
-        notify("💀 Silent Aim", "Enabled", 2)
+        log("═══ ENABLED (Manual Mode) ═══")
+        log("Стріляй ЛКМ — куля полетить у Murderer-а")
+        notify("💀 Silent Aim", "Enabled — shoot manually!", 3)
     else
         unhook()
-        stopAutoShoot()
         log("═══ DISABLED ═══")
         notify("💀 Silent Aim", "Disabled", 2)
     end
@@ -245,18 +200,17 @@ function SilentAim:setMethod() end
 
 function SilentAim:getStats()
     return {
-        Enabled = Config.Enabled,
-        Shots   = shots,
-        Hooked  = hooked,
+        Enabled  = Config.Enabled,
+        Shots    = shots,
+        Hooked   = hooked,
         Murderer = findMurderer() and findMurderer().Name or "None",
     }
 end
 
 log("═══════════════════════════════")
-log("Silent Aim MM2 (REAL METHOD)")
+log("Silent Aim MM2 — MANUAL Mode")
 log("Hook: ShootGun:InvokeServer")
-log("Args: [1]=1, [2]=Vector3, [3]='AH'")
-log("Offset: " .. Config.ShootOffset)
+log("Ти стріляєш → хук підмінює")
 log("═══════════════════════════════")
 
 return SilentAim.new()

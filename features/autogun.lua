@@ -1,6 +1,6 @@
 --// ╔══════════════════════════════════════════════════════════════╗
---// ║  TrustHub Auto Gun v7.0 — Optimized Edition                  ║
---// ║  Throttled scan • Fast TP • No lag                           ║
+--// ║  TrustHub Auto Gun v7.1 — Murderer Skip                      ║
+--// ║  Не бере пістолет, якщо ти Murderer                           ║
 --// ╚══════════════════════════════════════════════════════════════╝
 
 local Players    = game:GetService("Players")
@@ -14,9 +14,10 @@ local LocalPlayer = Players.LocalPlayer
 --// ============================================================
 local Config = {
     Enabled       = false,
-    ScanRate      = 0.5,       -- ⚡ скануємо раз на 0.5с (не кожен кадр!)
+    ScanRate      = 0.5,
     MaxDistance   = 5000,
     Cooldown      = 1.0,
+    SkipIfMurderer = true,   -- ← НЕ брати пістолет, якщо я Murderer
     LogEnabled    = true,
     NotifyEnabled = true,
 }
@@ -28,7 +29,7 @@ local enabled = false
 local busy = false
 local lastAttempt = 0
 local lastScan = 0
-local cachedGun = nil   -- кеш цілі
+local cachedGun = nil
 local loopConn = nil
 
 --// ============================================================
@@ -58,6 +59,25 @@ local function getChar()
 end
 
 --// ============================================================
+--//  ROLE DETECTION — чи я Murderer?
+--// ============================================================
+local function isLocalMurderer()
+    local char = LocalPlayer.Character
+    if not char then return false end
+
+    --// Шукаємо ніж у себе
+    for _, tool in ipairs(char:GetChildren()) do
+        if tool:IsA("Tool") then
+            local n = tool.Name:lower()
+            if n:find("knife") or n:find("blade") then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+--// ============================================================
 --//  GUN DETECTION
 --// ============================================================
 local function isGunDrop(obj)
@@ -68,13 +88,18 @@ local function isGunDrop(obj)
 end
 
 --// ============================================================
---//  SCAN FOR GUNDROP (throttled)
+--//  SCAN FOR GUNDROP
 --// ============================================================
 local function scanForGun()
+    --// ЯКЩО Я MURDERER — НЕ ШУКАЄМО ПІСТОЛЕТ
+    if Config.SkipIfMurderer and isLocalMurderer() then
+        return nil
+    end
+
     local char, hum, hrp = getChar()
     if not hrp then return nil end
 
-    -- Вже тримаємо пістолет — не шукаємо
+    --// Вже тримаємо пістолет — не шукаємо
     local current = char:FindFirstChildWhichIsA("Tool")
     if current then
         local n = current.Name:lower()
@@ -83,7 +108,6 @@ local function scanForGun()
         end
     end
 
-    -- Шукаємо тільки в Workspace (не в GetDescendants — швидше)
     local best, bestDist = nil, math.huge
 
     for _, obj in ipairs(workspace:GetChildren()) do
@@ -96,7 +120,6 @@ local function scanForGun()
         end
     end
 
-    -- Також шукаємо в моделях
     for _, obj in ipairs(workspace:GetChildren()) do
         if obj:IsA("Model") then
             for _, child in ipairs(obj:GetChildren()) do
@@ -122,6 +145,12 @@ end
 --// ============================================================
 local function fastGrab(gun)
     if busy or not gun or not gun.Parent then return end
+
+    --// ЩЕ РАЗ ПЕРЕВІРКА (раптом роль змінилась)
+    if Config.SkipIfMurderer and isLocalMurderer() then
+        return
+    end
+
     local now = tick()
     if now - lastAttempt < Config.Cooldown then return end
     lastAttempt = now
@@ -133,20 +162,14 @@ local function fastGrab(gun)
         return
     end
 
-    -- Зберігаємо оригінальну позицію
     local originalCFrame = hrp.CFrame
     local originalVelocity = hrp.AssemblyLinearVelocity
 
-    -- Телепорт до GunDrop
     hrp.CFrame = CFrame.new(gun.Position + Vector3.new(0, 2, 0))
     hrp.AssemblyLinearVelocity = Vector3.zero
 
-    -- Чекаємо 1-2 кадри
     task.wait(0.05)
 
-    -- Гра сама підбирає GunDrop через дотик
-
-    -- Повертаємось назад
     local newChar, newHum, newHrp = getChar()
     if newHrp then
         newHrp.CFrame = originalCFrame
@@ -160,7 +183,7 @@ local function fastGrab(gun)
 end
 
 --// ============================================================
---//  MAIN LOOP (throttled — не кожен кадр!)
+--//  MAIN LOOP
 --// ============================================================
 local function startLoop()
     if loopConn then loopConn:Disconnect() end
@@ -172,7 +195,6 @@ local function startLoop()
         if now - lastScan < Config.ScanRate then return end
         lastScan = now
 
-        -- Скануємо тільки раз на ScanRate
         local gun = scanForGun()
         if gun then
             task.spawn(fastGrab, gun)
@@ -214,6 +236,7 @@ end
 function AutoGun:setMaxDistance(v) Config.MaxDistance = v end
 function AutoGun:setRange(v) Config.MaxDistance = v end
 function AutoGun:setNotify(v) Config.NotifyEnabled = v end
+function AutoGun:setSkipIfMurderer(v) Config.SkipIfMurderer = v end
 function AutoGun:setInstantPickup(v) end
 function AutoGun:setAutoEquip(v) end
 
@@ -226,8 +249,8 @@ LocalPlayer.CharacterAdded:Connect(function()
 end)
 
 log("═══════════════════════════════════")
-log("TrustHub Auto Gun v7.0 (Optimized)")
-log("Scan rate: " .. Config.ScanRate .. "s")
+log("TrustHub Auto Gun v7.1")
+log("Skip if Murderer: " .. tostring(Config.SkipIfMurderer))
 log("═══════════════════════════════════")
 
 return AutoGun.new()

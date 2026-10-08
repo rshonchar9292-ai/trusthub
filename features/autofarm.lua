@@ -1,5 +1,6 @@
 --// ╔══════════════════════════════════════════════════════════════╗
---// ║  TrustHub Auto Farm v11.1 — SkidFling Edition (Speed 22)     ║
+--// ║  TrustHub Auto Farm v11.2 — Fixed Coin Collection             ║
+--// ║  Speed 22 • SkidFling • Auto-fling on death                   ║
 --// ╚══════════════════════════════════════════════════════════════╝
 
 local Players      = game:GetService("Players")
@@ -14,10 +15,10 @@ local LocalPlayer  = Players.LocalPlayer
 --//  CONFIG
 --// ============================================================
 local CONFIG = {
-    Speed           = 22,     -- ⚡ Speed 22 (як у v9.0)
-    CoinRange       = 3,
+    Speed           = 22,
     TargetRefresh   = 0.25,
     CacheRefresh    = 3,
+    MaxTargetTime   = 4,
     AutoFling       = true,
     AutoFlingDelay  = 0.5,
     AutoKill        = false,
@@ -29,24 +30,25 @@ local CONFIG = {
 --// ============================================================
 --//  STATE
 --// ============================================================
-local enabled         = false
-local coinCache       = {}
-local cacheDirty      = true
-local lastCacheTime   = 0
-local currentTarget   = nil
-local currentCoinPos  = nil
-local lastTargetTime  = 0
-local flyVel          = nil
-local flyAtt          = nil
-local flyAlign        = nil
-local noclipConn      = nil
-local mainConn        = nil
-local deathConn       = nil
-local afkConn         = nil
-local flingInProgress = false
-local hasFlinged      = false
-local allCollected    = false
-local collectedCount  = 0
+local enabled          = false
+local coinCache        = {}
+local cacheDirty       = true
+local lastCacheTime    = 0
+local currentTarget    = nil
+local currentCoinPos   = nil
+local lastTargetTime   = 0
+local targetAcquiredAt = 0
+local flyVel           = nil
+local flyAtt           = nil
+local flyAlign         = nil
+local noclipConn       = nil
+local mainConn         = nil
+local deathConn        = nil
+local afkConn          = nil
+local flingInProgress  = false
+local hasFlinged       = false
+local allCollected     = false
+local collectedCount   = 0
 local getgenv = getgenv or function() return _G end
 
 --// ============================================================
@@ -451,13 +453,14 @@ end
 --//  ROUND RESET
 --// ============================================================
 local function resetRound()
-    currentTarget   = nil
-    currentCoinPos  = nil
-    allCollected    = false
-    flingInProgress = false
-    hasFlinged      = false
-    collectedCount  = 0
-    cacheDirty      = true
+    currentTarget    = nil
+    currentCoinPos   = nil
+    allCollected     = false
+    flingInProgress  = false
+    hasFlinged       = false
+    collectedCount   = 0
+    targetAcquiredAt = 0
+    cacheDirty       = true
     rebuildCache()
     log("Round reset — coins: " .. tostring(#coinCache))
 end
@@ -486,9 +489,8 @@ local function startDeathCheck()
 end
 
 --// ============================================================
---//  MAIN LOOP
+--//  MAIN LOOP — Fixed (летимо прямо в монету)
 --// ============================================================
-local cacheTimer = 0
 local roundCheckTimer = 0
 
 local function startMainLoop()
@@ -500,6 +502,7 @@ local function startMainLoop()
         local char, hum, hrp = getChar()
         if not hrp or not flyVel then return end
 
+        --// Перевірка нового раунду / всі монети зібрані
         roundCheckTimer = roundCheckTimer + dt
         if roundCheckTimer > 2 then
             roundCheckTimer = 0
@@ -515,23 +518,52 @@ local function startMainLoop()
             end
         end
 
-        local now = tick()
-        if (now - lastTargetTime) > CONFIG.TargetRefresh
-            or not currentTarget
-            or not currentTarget.Parent then
-            lastTargetTime = now
-            currentTarget, currentCoinPos = findNearestCoin()
+        --// Якщо монета зникла (гра підібрала) — скидаємо ціль
+        if currentTarget and not currentTarget.Parent then
+            collectedCount = collectedCount + 1
+            coinCache[currentTarget] = nil
+            log("Монета зібрана! Всього: " .. collectedCount)
+            currentTarget = nil
+            currentCoinPos = nil
         end
 
-        if currentTarget and currentCoinPos and currentTarget.Parent then
+        --// Оновлення цілі
+        local now = tick()
+        if not currentTarget or not currentCoinPos then
+            if (now - lastTargetTime) > CONFIG.TargetRefresh then
+                lastTargetTime = now
+                currentTarget, currentCoinPos = findNearestCoin()
+                if currentTarget then
+                    targetAcquiredAt = now
+                    log("Нова ціль: " .. currentTarget.Name)
+                end
+            end
+        end
+
+        --// Рух до цілі — летимо ПРЯМО в монету
+        if currentTarget and currentTarget.Parent and currentCoinPos then
+            --// Оновлюємо позицію монети (вона може рухатись)
+            currentCoinPos = currentTarget.Position
+
             local direction = currentCoinPos - hrp.Position
             local dist = direction.Magnitude
-            if dist > CONFIG.CoinRange then
-                local speedMul = math.clamp(dist / 15, 0.5, 1)
+
+            if dist > 0.5 then
+                --// Плавний підхід
+                local speedMul = 1
+                if dist < 5 then
+                    speedMul = math.clamp(dist / 5, 0.3, 1)
+                end
                 flyVel.VectorVelocity = direction.Unit * CONFIG.Speed * speedMul
             else
+                --// На місці — тримаємо, чекаємо підбору
                 flyVel.VectorVelocity = Vector3.zero
-                collectedCount = collectedCount + 1
+            end
+
+            --// Таймаут: якщо летимо > MaxTargetTime і монета не зникла — скіпаємо
+            local targetTime = now - targetAcquiredAt
+            if targetTime > CONFIG.MaxTargetTime then
+                log("⚠ Таймаут на " .. currentTarget.Name .. " — скіпаємо")
                 coinCache[currentTarget] = nil
                 currentTarget = nil
                 currentCoinPos = nil
@@ -623,8 +655,8 @@ function AutoFarm:setAutoStart() end
 function AutoFarm:killAll() end
 
 log("═══════════════════════════════════")
-log("TrustHub Auto Farm v11.1 (Speed 22)")
-log("SkidFling • Auto-fling on death")
+log("TrustHub Auto Farm v11.2 (Speed 22)")
+log("Fixed: летить прямо в монету")
 log("═══════════════════════════════════")
 
 return AutoFarm.new()

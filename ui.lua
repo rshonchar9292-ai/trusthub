@@ -1,5 +1,5 @@
 --// ==================================================
---// TrustHub UI v14.1 — Working Build
+--// TrustHub UI v13.0 — 7 tabs + Anti-Fling
 --// ==================================================
 
 local TweenService     = game:GetService("TweenService")
@@ -28,6 +28,7 @@ local Theme = {
     Stroke     = Color3.fromRGB(58, 58, 78),
 }
 
+--// HELPERS
 local function tween(obj, time, props, style, dir)
     local t = TweenService:Create(
         obj,
@@ -71,11 +72,10 @@ local function createRipple(parent, x, y)
         Size = UDim2.new(0, maxSize, 0, maxSize),
         BackgroundTransparency = 1,
     }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-    t.Completed:Connect(function()
-        r:Destroy()
-    end)
+    t.Completed:Connect(function() r:Destroy() end)
 end
 
+--// TOGGLE
 local function createToggle(parent, text, default, callback)
     local Btn = Instance.new("TextButton")
     Btn.Size = UDim2.new(1, -16, 0, 36)
@@ -121,18 +121,15 @@ local function createToggle(parent, text, default, callback)
         tween(Dot, 0.25, {
             Position = state and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
         }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-        if callback then callback(state) end
+        callback(state)
     end)
 
-    Btn.MouseEnter:Connect(function()
-        tween(Btn, 0.15, {BackgroundColor3 = Theme.ElementHov})
-    end)
-    Btn.MouseLeave:Connect(function()
-        tween(Btn, 0.15, {BackgroundColor3 = Theme.Element})
-    end)
+    Btn.MouseEnter:Connect(function() tween(Btn, 0.15, {BackgroundColor3 = Theme.ElementHov}) end)
+    Btn.MouseLeave:Connect(function() tween(Btn, 0.15, {BackgroundColor3 = Theme.Element}) end)
     return Btn
 end
 
+--// SLIDER
 local function createSlider(parent, text, min, max, default, callback)
     local Frame = Instance.new("Frame")
     Frame.Size = UDim2.new(1, -16, 0, 52)
@@ -194,31 +191,24 @@ local function createSlider(parent, text, min, max, default, callback)
         Fill.Size = UDim2.new(alpha, 0, 1, 0)
         Knob.Position = UDim2.new(alpha, 0, 0.5, 0)
         ValueLbl.Text = tostring(value)
-        if callback then callback(value) end
+        callback(value)
     end
 
     Bar.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true
-            update(input)
+            dragging = true; update(input)
         end
     end)
-
     UserInputService.InputChanged:Connect(function(input)
-        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-            update(input)
-        end
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then update(input) end
     end)
-
     UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = false
-        end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
     end)
-
     return Frame
 end
 
+--// SECTION
 local function createSection(parent, text)
     local Lbl = Instance.new("TextLabel")
     Lbl.Size = UDim2.new(1, -16, 0, 22)
@@ -239,6 +229,7 @@ local function createSection(parent, text)
     return Lbl
 end
 
+--// ACTION BUTTON
 local function createActionButton(parent, text, color, callback)
     local Btn = Instance.new("TextButton")
     Btn.Size = UDim2.new(1, -16, 0, 46)
@@ -256,27 +247,24 @@ local function createActionButton(parent, text, color, callback)
     grad.Color = ColorSequence.new({
         ColorSequenceKeypoint.new(0, color),
         ColorSequenceKeypoint.new(1, Color3.fromRGB(
-            math.min(255, math.floor(color.R * 255) + 50),
-            math.min(255, math.floor(color.G * 255) + 50),
-            math.min(255, math.floor(color.B * 255) + 50)
+            math.min(255, color.R * 255 + 50),
+            math.min(255, color.G * 255 + 50),
+            math.min(255, color.B * 255 + 50)
         )),
     })
     grad.Rotation = 45
     grad.Parent = Btn
 
-    Btn.MouseEnter:Connect(function()
-        tween(Btn, 0.15, {Size = UDim2.new(1, -16, 0, 50)})
-    end)
-    Btn.MouseLeave:Connect(function()
-        tween(Btn, 0.15, {Size = UDim2.new(1, -16, 0, 46)})
-    end)
+    Btn.MouseEnter:Connect(function() tween(Btn, 0.15, {Size = UDim2.new(1, -16, 0, 50)}) end)
+    Btn.MouseLeave:Connect(function() tween(Btn, 0.15, {Size = UDim2.new(1, -16, 0, 46)}) end)
     Btn.MouseButton1Click:Connect(function()
         createRipple(Btn, Mouse.X - Btn.AbsolutePosition.X, Mouse.Y - Btn.AbsolutePosition.Y)
-        if callback then callback() end
+        callback()
     end)
     return Btn
 end
 
+--// PLAYER ROW
 local function createPlayerRow(parent, plr, role, roleColor, callback)
     local row = Instance.new("TextButton")
     row.Size = UDim2.new(1, -8, 0, 46)
@@ -295,9 +283,25 @@ local function createPlayerRow(parent, plr, role, roleColor, callback)
     stripe.Parent = row
     corner(stripe, 999)
 
+    local avatar = Instance.new("ImageLabel")
+    avatar.Size = UDim2.new(0, 34, 0, 34)
+    avatar.Position = UDim2.new(0, 10, 0.5, -17)
+    avatar.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    avatar.BorderSizePixel = 0
+    avatar.Image = "rbxassetid://0"
+    avatar.Parent = row
+    corner(avatar, 999)
+
+    task.spawn(function()
+        local ok, thumb = pcall(function()
+            return Players:GetUserThumbnailAsync(plr.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+        end)
+        if ok and thumb and avatar.Parent then avatar.Image = thumb end
+    end)
+
     local nameLbl = Instance.new("TextLabel")
-    nameLbl.Size = UDim2.new(1, -50, 0, 18)
-    nameLbl.Position = UDim2.new(0, 12, 0, 5)
+    nameLbl.Size = UDim2.new(1, -100, 0, 18)
+    nameLbl.Position = UDim2.new(0, 52, 0, 5)
     nameLbl.BackgroundTransparency = 1
     nameLbl.Text = plr.Name
     nameLbl.TextColor3 = Theme.Text
@@ -308,8 +312,8 @@ local function createPlayerRow(parent, plr, role, roleColor, callback)
     nameLbl.Parent = row
 
     local roleLbl = Instance.new("TextLabel")
-    roleLbl.Size = UDim2.new(1, -50, 0, 14)
-    roleLbl.Position = UDim2.new(0, 12, 0, 23)
+    roleLbl.Size = UDim2.new(1, -100, 0, 14)
+    roleLbl.Position = UDim2.new(0, 52, 0, 23)
     roleLbl.BackgroundTransparency = 1
     roleLbl.Text = role
     roleLbl.TextColor3 = roleColor
@@ -318,19 +322,26 @@ local function createPlayerRow(parent, plr, role, roleColor, callback)
     roleLbl.TextXAlignment = Enum.TextXAlignment.Left
     roleLbl.Parent = row
 
-    row.MouseEnter:Connect(function()
-        tween(row, 0.15, {BackgroundColor3 = Theme.ElementHov})
-    end)
-    row.MouseLeave:Connect(function()
-        tween(row, 0.15, {BackgroundColor3 = Theme.Element})
-    end)
+    local flingIcon = Instance.new("TextLabel")
+    flingIcon.Size = UDim2.new(0, 30, 1, 0)
+    flingIcon.Position = UDim2.new(1, -36, 0, 0)
+    flingIcon.BackgroundTransparency = 1
+    flingIcon.Text = "💥"
+    flingIcon.TextSize = 16
+    flingIcon.Parent = row
+
+    row.MouseEnter:Connect(function() tween(row, 0.15, {BackgroundColor3 = Theme.ElementHov}) end)
+    row.MouseLeave:Connect(function() tween(row, 0.15, {BackgroundColor3 = Theme.Element}) end)
     row.MouseButton1Click:Connect(function()
         createRipple(row, Mouse.X - row.AbsolutePosition.X, Mouse.Y - row.AbsolutePosition.Y)
-        if callback then callback(plr) end
+        callback(plr)
     end)
     return row
 end
 
+--// ==================================================
+--// UI:init
+--// ==================================================
 function UI:init(Features)
     local ScreenGui = Instance.new("ScreenGui")
     ScreenGui.Name = "TrustHubUI"
@@ -339,6 +350,7 @@ function UI:init(Features)
     ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
+    --// Floating Button
     local FloatingBtn = Instance.new("TextButton")
     FloatingBtn.Size = UDim2.new(0, 52, 0, 52)
     FloatingBtn.Position = UDim2.new(0, 30, 0.5, -26)
@@ -374,6 +386,7 @@ function UI:init(Features)
         tween(FloatingBtn, 0.2, {Size = UDim2.new(0, 52, 0, 52)}, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
     end)
 
+    --// Main Window
     local Main = Instance.new("Frame")
     Main.AnchorPoint = Vector2.new(0.5, 0.5)
     Main.Size = UDim2.new(0, 0, 0, 0)
@@ -395,6 +408,7 @@ function UI:init(Features)
     MainGrad.Rotation = 135
     MainGrad.Parent = Main
 
+    --// Header
     local Header = Instance.new("Frame")
     Header.Size = UDim2.new(1, 0, 0, 44)
     Header.BackgroundColor3 = Theme.Panel
@@ -451,7 +465,7 @@ function UI:init(Features)
     VersionLbl.Size = UDim2.new(0, 60, 1, 0)
     VersionLbl.Position = UDim2.new(1, -100, 0, 0)
     VersionLbl.BackgroundTransparency = 1
-    VersionLbl.Text = "v14.1"
+    VersionLbl.Text = "v13.0"
     VersionLbl.TextColor3 = Theme.TextDim
     VersionLbl.Font = Enum.Font.Gotham
     VersionLbl.TextSize = 11
@@ -471,13 +485,10 @@ function UI:init(Features)
     CloseBtn.Parent = Header
     corner(CloseBtn, 8)
 
-    CloseBtn.MouseEnter:Connect(function()
-        tween(CloseBtn, 0.15, {BackgroundColor3 = Theme.Danger})
-    end)
-    CloseBtn.MouseLeave:Connect(function()
-        tween(CloseBtn, 0.15, {BackgroundColor3 = Theme.Element})
-    end)
+    CloseBtn.MouseEnter:Connect(function() tween(CloseBtn, 0.15, {BackgroundColor3 = Theme.Danger}) end)
+    CloseBtn.MouseLeave:Connect(function() tween(CloseBtn, 0.15, {BackgroundColor3 = Theme.Element}) end)
 
+    --// Tab Bar
     local TabBar = Instance.new("Frame")
     TabBar.Size = UDim2.new(0, 150, 1, -58)
     TabBar.Position = UDim2.new(0, 10, 0, 52)
@@ -490,6 +501,7 @@ function UI:init(Features)
     TabLayout.SortOrder = Enum.SortOrder.LayoutOrder
     TabLayout.Parent = TabBar
 
+    --// Content
     local Content = Instance.new("Frame")
     Content.Size = UDim2.new(1, -176, 1, -58)
     Content.Position = UDim2.new(0, 166, 0, 52)
@@ -505,6 +517,7 @@ function UI:init(Features)
     ContentPad.PaddingBottom = UDim.new(0, 8)
     ContentPad.Parent = Content
 
+    --// Tabs System
     local Tabs = {}
     local ActiveTab = nil
 
@@ -527,9 +540,19 @@ function UI:init(Features)
         Indicator.Parent = Btn
         corner(Indicator, 999)
 
+        local Emoji = Instance.new("TextLabel")
+        Emoji.Size = UDim2.new(0, 24, 1, 0)
+        Emoji.Position = UDim2.new(0, 12, 0, 0)
+        Emoji.BackgroundTransparency = 1
+        Emoji.Text = letter
+        Emoji.TextColor3 = Theme.Text
+        Emoji.TextSize = 15
+        Emoji.TextXAlignment = Enum.TextXAlignment.Left
+        Emoji.Parent = Btn
+
         local Label = Instance.new("TextLabel")
-        Label.Size = UDim2.new(1, -20, 1, 0)
-        Label.Position = UDim2.new(0, 16, 0, 0)
+        Label.Size = UDim2.new(1, -44, 1, 0)
+        Label.Position = UDim2.new(0, 40, 0, 0)
         Label.BackgroundTransparency = 1
         Label.Text = name
         Label.TextColor3 = Theme.Text
@@ -555,7 +578,7 @@ function UI:init(Features)
         Layout.SortOrder = Enum.SortOrder.LayoutOrder
         Layout.Parent = Page
 
-        Tabs[name] = {Button=Btn, Page=Page, Indicator=Indicator, Label=Label}
+        Tabs[name] = {Button=Btn, Page=Page, Indicator=Indicator, Label=Label, Emoji=Emoji}
 
         local function activate()
             for _, t in pairs(Tabs) do
@@ -563,6 +586,7 @@ function UI:init(Features)
                 tween(t.Button, 0.2, {BackgroundColor3 = Theme.Panel})
                 tween(t.Indicator, 0.2, {BackgroundTransparency = 1, Size = UDim2.new(0, 3, 0.4, 0)})
                 tween(t.Label, 0.2, {TextColor3 = Theme.Text})
+                tween(t.Emoji, 0.2, {TextColor3 = Theme.Text})
             end
             Page.Visible = true
             Page.Position = UDim2.new(0, 20, 0, 0)
@@ -574,6 +598,7 @@ function UI:init(Features)
                 Position = UDim2.new(0, 0, 0.15, 0),
             })
             tween(Label, 0.2, {TextColor3 = Theme.Accent})
+            tween(Emoji, 0.2, {TextColor3 = Theme.Accent})
             ActiveTab = name
         end
 
@@ -583,34 +608,31 @@ function UI:init(Features)
         end)
 
         Btn.MouseEnter:Connect(function()
-            if ActiveTab ~= name then
-                tween(Btn, 0.15, {BackgroundColor3 = Theme.PanelLight})
-            end
+            if ActiveTab ~= name then tween(Btn, 0.15, {BackgroundColor3 = Theme.PanelLight}) end
         end)
         Btn.MouseLeave:Connect(function()
-            if ActiveTab ~= name then
-                tween(Btn, 0.15, {BackgroundColor3 = Theme.Panel})
-            end
+            if ActiveTab ~= name then tween(Btn, 0.15, {BackgroundColor3 = Theme.Panel}) end
         end)
 
         return Page
     end
 
+    --// 7 Tabs
     local AimPage       = createTab("Aimbot", "A")
-    local MurdererPage  = createTab("Murderer", "M")
+    local MurdererPage  = createTab("Murderer", "🔪")
     local FlingPage     = createTab("Fling", "F")
     local VisualsPage   = createTab("Visuals", "V")
-    local MovePage      = createTab("Movement", "P")
-    local AnimationPage = createTab("Animation", "N")
+    local MovePage      = createTab("Movement", "M")
+    local AnimationPage = createTab("Animation", "🎭")
     local SettingsPage  = createTab("Settings", "S")
 
-    -- AIMBOT
+    --// ==================================================
+    --// AIMBOT TAB
+    --// ==================================================
     createSection(AimPage, "Silent Aim")
 
     createToggle(AimPage, "Enable Silent Aim", false, function(v)
-        if Features.SilentAim and Features.SilentAim.setEnabled then
-            Features.SilentAim:setEnabled(v)
-        end
+        if Features.SilentAim then Features.SilentAim:setEnabled(v) end
     end)
 
     createSlider(AimPage, "FOV Radius", 50, 600, 200, function(v)
@@ -619,7 +641,7 @@ function UI:init(Features)
         end
     end)
 
-    createSlider(AimPage, "Hit Chance", 1, 100, 100, function(v)
+    createSlider(AimPage, "Hit Chance %", 1, 100, 100, function(v)
         if Features.SilentAim and Features.SilentAim.setHitChance then
             Features.SilentAim:setHitChance(v)
         end
@@ -643,37 +665,59 @@ function UI:init(Features)
         end
     end)
 
-    -- MURDERER
-    createSection(MurdererPage, "Murderer Actions")
-
-    createActionButton(MurdererPage, "KILL ALL", Color3.fromRGB(200, 30, 30), function()
-        if Features.Murderer and Features.Murderer.killAll then
-            Features.Murderer:killAll()
+    createToggle(AimPage, "Show FOV Circle", true, function(v)
+        if Features.SilentAim and Features.SilentAim.setShowFOV then
+            Features.SilentAim:setShowFOV(v)
         end
     end)
 
-    createActionButton(MurdererPage, "FLING ALL", Color3.fromRGB(255, 100, 100), function()
-        if Features.Murderer and Features.Murderer.flingAll then
-            Features.Murderer:flingAll()
-        end
+    --// ==================================================
+    --// MURDERER TAB
+    --// ==================================================
+    createSection(MurdererPage, "🔪 Murderer Actions")
+
+    createActionButton(MurdererPage, "💀 KILL ALL PLAYERS", Color3.fromRGB(200, 30, 30), function()
+        if Features.Murderer then Features.Murderer:killAll() end
     end)
 
-    -- FLING
+    createActionButton(MurdererPage, "💥 FLING ALL PLAYERS", Color3.fromRGB(255, 100, 100), function()
+        if Features.Murderer then Features.Murderer:flingAll() end
+    end)
+
+    createToggle(MurdererPage, "Auto Kill (every 2s)", false, function(v)
+        if Features.Murderer then Features.Murderer:setAutoKill(v) end
+    end)
+
+    createActionButton(MurdererPage, "🔍 DIAGNOSTICS", Theme.Accent, function()
+        if Features.Murderer then Features.Murderer:diagnostics() end
+    end)
+
+    local murInfo = Instance.new("TextLabel")
+    murInfo.Size = UDim2.new(1, -16, 0, 90)
+    murInfo.BackgroundTransparency = 1
+    murInfo.Text = "⚠ Works ONLY as Murderer (with knife)"
+    murInfo.TextColor3 = Theme.TextDim
+    murInfo.Font = Enum.Font.Gotham
+    murInfo.TextSize = 11
+    murInfo.TextXAlignment = Enum.TextXAlignment.Left
+    murInfo.TextYAlignment = Enum.TextYAlignment.Top
+    murInfo.TextWrapped = true
+    murInfo.Parent = MurdererPage
+
+    --// ==================================================
+    --// FLING TAB
+    --// ==================================================
     createSection(FlingPage, "Quick Actions")
 
     createActionButton(FlingPage, "FLING SHERIFF", Theme.Sheriff, function()
-        if Features.Fling and Features.Fling.flingSheriff then
-            Features.Fling:flingSheriff()
-        end
+        if Features.Fling then Features.Fling:flingSheriff() end
     end)
 
     createActionButton(FlingPage, "FLING MURDER", Theme.Murderer, function()
-        if Features.Fling and Features.Fling.flingMurderer then
-            Features.Fling:flingMurderer()
-        end
+        if Features.Fling then Features.Fling:flingMurderer() end
     end)
 
-    createSection(FlingPage, "Players")
+    createSection(FlingPage, "Players — Click to Fling")
 
     local playerListFrame = Instance.new("Frame")
     playerListFrame.Size = UDim2.new(1, -16, 0, 320)
@@ -700,21 +744,15 @@ function UI:init(Features)
 
     local function refreshPlayerList()
         for _, child in ipairs(playerListScroll:GetChildren()) do
-            if child:IsA("TextButton") then
-                child:Destroy()
-            end
+            if child:IsA("TextButton") then child:Destroy() end
         end
-        if not Features.Fling or not Features.Fling.getPlayersWithRoles then
-            return
-        end
+        if not Features.Fling or not Features.Fling.getPlayersWithRoles then return end
         local list = Features.Fling:getPlayersWithRoles()
         for _, data in ipairs(list) do
             createPlayerRow(
                 playerListScroll, data.player, data.role, data.color,
                 function(plr)
-                    if Features.Fling and Features.Fling.flingPlayer then
-                        Features.Fling:flingPlayer(plr)
-                    end
+                    if Features.Fling then Features.Fling:flingPlayer(plr) end
                 end
             )
         end
@@ -728,117 +766,120 @@ function UI:init(Features)
         end
     end)
 
-    -- VISUALS
+    --// ==================================================
+    --// VISUALS TAB
+    --// ==================================================
     createSection(VisualsPage, "ESP")
 
     createToggle(VisualsPage, "Enable ESP", false, function(v)
-        if Features.ESP and Features.ESP.setEnabled then
-            Features.ESP:setEnabled(v)
-        end
+        if Features.ESP then Features.ESP:setEnabled(v) end
     end)
 
+    local legendFrame = Instance.new("Frame")
+    legendFrame.Size = UDim2.new(1, -16, 0, 90)
+    legendFrame.BackgroundColor3 = Theme.Element
+    legendFrame.BorderSizePixel = 0
+    legendFrame.Parent = VisualsPage
+    corner(legendFrame, 8)
+
+    local legendText = Instance.new("TextLabel")
+    legendText.Size = UDim2.new(1, -20, 1, 0)
+    legendText.Position = UDim2.new(0, 10, 0, 0)
+    legendText.BackgroundTransparency = 1
+    legendText.Text = "Role Colors\n\nRed   = Murderer\nBlue  = Sheriff\nGreen = Innocent"
+    legendText.TextColor3 = Theme.TextDim
+    legendText.Font = Enum.Font.Gotham
+    legendText.TextSize = 12
+    legendText.TextXAlignment = Enum.TextXAlignment.Left
+    legendText.TextYAlignment = Enum.TextYAlignment.Center
+    legendText.Parent = legendFrame
+
+    --// FOV
     createSection(VisualsPage, "Camera FOV")
 
     createToggle(VisualsPage, "Enable FOV Changer", false, function(v)
-        if Features.FOV and Features.FOV.setEnabled then
-            Features.FOV:setEnabled(v)
-        end
+        if Features.FOV then Features.FOV:setEnabled(v) end
     end)
 
     createSlider(VisualsPage, "FOV Value", 20, 120, 70, function(v)
-        if Features.FOV and Features.FOV.setValue then
-            Features.FOV:setValue(v)
-        end
+        if Features.FOV and Features.FOV.setValue then Features.FOV:setValue(v) end
     end)
 
-    createSection(VisualsPage, "Animated Wings")
+    local fovInfo = Instance.new("TextLabel")
+    fovInfo.Size = UDim2.new(1, -16, 0, 30)
+    fovInfo.BackgroundTransparency = 1
+    fovInfo.Text = "70 = default  •  100+ = widescreen"
+    fovInfo.TextColor3 = Theme.TextDim
+    fovInfo.Font = Enum.Font.Gotham
+    fovInfo.TextSize = 11
+    fovInfo.TextXAlignment = Enum.TextXAlignment.Left
+    fovInfo.Parent = VisualsPage
+
+    --// ==================================================
+    --// WINGS (NEW)
+    --// ==================================================
+    createSection(VisualsPage, "🪽 Animated Wings")
 
     createToggle(VisualsPage, "Enable Wings", false, function(v)
-        if Features.Wings and Features.Wings.setEnabled then
-            Features.Wings:setEnabled(v)
-        end
+        if Features.Wings then Features.Wings:setEnabled(v) end
     end)
 
     createSlider(VisualsPage, "Wing Size", 3, 25, 8, function(v)
-        if Features.Wings and Features.Wings.setSize then
-            Features.Wings:setSize(v)
-        end
+        if Features.Wings and Features.Wings.setSize then Features.Wings:setSize(v) end
     end)
 
     createSlider(VisualsPage, "Wing Flap Speed", 1, 20, 4, function(v)
-        if Features.Wings and Features.Wings.setSpeed then
-            Features.Wings:setSpeed(v)
-        end
+        if Features.Wings and Features.Wings.setSpeed then Features.Wings:setSpeed(v) end
     end)
 
-    createSlider(VisualsPage, "Wing Flap Angle", 10, 80, 50, function(v)
-        if Features.Wings and Features.Wings.setFlapAngle then
-            Features.Wings:setFlapAngle(v)
-        end
+    createSlider(VisualsPage, "Wing Color R", 0, 255, 255, function(v)
+        if Features.Wings and Features.Wings.setColorR then Features.Wings:setColorR(v) end
     end)
 
-    createSlider(VisualsPage, "Wing R", 0, 255, 255, function(v)
-        if Features.Wings and Features.Wings.setColorR then
-            Features.Wings:setColorR(v)
-        end
+    createSlider(VisualsPage, "Wing Color G", 0, 255, 255, function(v)
+        if Features.Wings and Features.Wings.setColorG then Features.Wings:setColorG(v) end
     end)
 
-    createSlider(VisualsPage, "Wing G", 0, 255, 255, function(v)
-        if Features.Wings and Features.Wings.setColorG then
-            Features.Wings:setColorG(v)
-        end
+    createSlider(VisualsPage, "Wing Color B", 0, 255, 255, function(v)
+        if Features.Wings and Features.Wings.setColorB then Features.Wings:setColorB(v) end
     end)
 
-    createSlider(VisualsPage, "Wing B", 0, 255, 255, function(v)
-        if Features.Wings and Features.Wings.setColorB then
-            Features.Wings:setColorB(v)
-        end
-    end)
-
-    createSection(VisualsPage, "Waterfall")
+    --// ==================================================
+    --// WATERFALL (NEW)
+    --// ==================================================
+    createSection(VisualsPage, "💧 Waterfall")
 
     createToggle(VisualsPage, "Enable Waterfall", false, function(v)
-        if Features.Waterfall and Features.Waterfall.setEnabled then
-            Features.Waterfall:setEnabled(v)
-        end
+        if Features.Waterfall then Features.Waterfall:setEnabled(v) end
     end)
 
     createSlider(VisualsPage, "Waterfall Size", 1, 15, 4, function(v)
-        if Features.Waterfall and Features.Waterfall.setSize then
-            Features.Waterfall:setSize(v)
-        end
+        if Features.Waterfall and Features.Waterfall.setSize then Features.Waterfall:setSize(v) end
     end)
 
     createSlider(VisualsPage, "Waterfall Density", 10, 500, 150, function(v)
-        if Features.Waterfall and Features.Waterfall.setDensity then
-            Features.Waterfall:setDensity(v)
-        end
+        if Features.Waterfall and Features.Waterfall.setDensity then Features.Waterfall:setDensity(v) end
     end)
 
     createSlider(VisualsPage, "Waterfall R", 0, 255, 80, function(v)
-        if Features.Waterfall and Features.Waterfall.setColorR then
-            Features.Waterfall:setColorR(v)
-        end
+        if Features.Waterfall and Features.Waterfall.setColorR then Features.Waterfall:setColorR(v) end
     end)
 
     createSlider(VisualsPage, "Waterfall G", 0, 255, 160, function(v)
-        if Features.Waterfall and Features.Waterfall.setColorG then
-            Features.Waterfall:setColorG(v)
-        end
+        if Features.Waterfall and Features.Waterfall.setColorG then Features.Waterfall:setColorG(v) end
     end)
 
     createSlider(VisualsPage, "Waterfall B", 0, 255, 255, function(v)
-        if Features.Waterfall and Features.Waterfall.setColorB then
-            Features.Waterfall:setColorB(v)
-        end
+        if Features.Waterfall and Features.Waterfall.setColorB then Features.Waterfall:setColorB(v) end
     end)
 
-    createSection(VisualsPage, "Body ESP")
+    --// ==================================================
+    --// BODY ESP (NEW)
+    --// ==================================================
+    createSection(VisualsPage, "👤 Body ESP (Self)")
 
     createToggle(VisualsPage, "Enable Body ESP", false, function(v)
-        if Features.BodyESP and Features.BodyESP.setEnabled then
-            Features.BodyESP:setEnabled(v)
-        end
+        if Features.BodyESP then Features.BodyESP:setEnabled(v) end
     end)
 
     createSlider(VisualsPage, "Body Transparency", 0, 1, 0.7, function(v)
@@ -847,59 +888,66 @@ function UI:init(Features)
         end
     end)
 
-    createSlider(VisualsPage, "Body R", 0, 255, 255, function(v)
-        if Features.BodyESP and Features.BodyESP.setColorR then
-            Features.BodyESP:setColorR(v)
-        end
+    createSlider(VisualsPage, "Body ESP R", 0, 255, 255, function(v)
+        if Features.BodyESP and Features.BodyESP.setColorR then Features.BodyESP:setColorR(v) end
     end)
 
-    createSlider(VisualsPage, "Body G", 0, 255, 30, function(v)
-        if Features.BodyESP and Features.BodyESP.setColorG then
-            Features.BodyESP:setColorG(v)
-        end
+    createSlider(VisualsPage, "Body ESP G", 0, 255, 30, function(v)
+        if Features.BodyESP and Features.BodyESP.setColorG then Features.BodyESP:setColorG(v) end
     end)
 
-    createSlider(VisualsPage, "Body B", 0, 255, 30, function(v)
-        if Features.BodyESP and Features.BodyESP.setColorB then
-            Features.BodyESP:setColorB(v)
-        end
+    createSlider(VisualsPage, "Body ESP B", 0, 255, 30, function(v)
+        if Features.BodyESP and Features.BodyESP.setColorB then Features.BodyESP:setColorB(v) end
     end)
 
-    createSlider(VisualsPage, "Body Fill", 0, 1, 0, function(v)
-        if Features.BodyESP and Features.BodyESP.setFill then
-            Features.BodyESP:setFill(v)
-        end
+    createSlider(VisualsPage, "Body ESP Fill", 0, 1, 0, function(v)
+        if Features.BodyESP and Features.BodyESP.setFill then Features.BodyESP:setFill(v) end
     end)
 
-    -- MOVEMENT
-    createSection(MovePage, "Fly")
+    --// ==================================================
+    --// MOVEMENT TAB
+    --// ==================================================
+
+    createSection(MovePage, "✈ Fly")
 
     createToggle(MovePage, "Enable Fly", false, function(v)
-        if Features.Fly and Features.Fly.setEnabled then
-            Features.Fly:setEnabled(v)
-        end
+        if Features.Fly then Features.Fly:setEnabled(v) end
     end)
 
     createSlider(MovePage, "Fly Speed", 10, 200, 60, function(v)
-        if Features.Fly and Features.Fly.setSpeed then
-            Features.Fly:setSpeed(v)
-        end
+        if Features.Fly and Features.Fly.setSpeed then Features.Fly:setSpeed(v) end
     end)
 
-    createSection(MovePage, "Infinite Jump")
+    local flyInfo = Instance.new("TextLabel")
+    flyInfo.Size = UDim2.new(1, -16, 0, 30)
+    flyInfo.BackgroundTransparency = 1
+    flyInfo.Text = "WASD to move  •  Space/Ctrl = up/down"
+    flyInfo.TextColor3 = Theme.TextDim
+    flyInfo.Font = Enum.Font.Gotham
+    flyInfo.TextSize = 11
+    flyInfo.TextXAlignment = Enum.TextXAlignment.Left
+    flyInfo.Parent = MovePage
+
+    createSection(MovePage, "🦘 Infinite Jump")
 
     createToggle(MovePage, "Enable Infinite Jump", false, function(v)
-        if Features.InfJump and Features.InfJump.setEnabled then
-            Features.InfJump:setEnabled(v)
-        end
+        if Features.InfJump then Features.InfJump:setEnabled(v) end
     end)
 
-    createSection(MovePage, "Anti-Fling")
+    local infjInfo = Instance.new("TextLabel")
+    infjInfo.Size = UDim2.new(1, -16, 0, 20)
+    infjInfo.BackgroundTransparency = 1
+    infjInfo.Text = "Hold Space to keep jumping"
+    infjInfo.TextColor3 = Theme.TextDim
+    infjInfo.Font = Enum.Font.Gotham
+    infjInfo.TextSize = 11
+    infjInfo.TextXAlignment = Enum.TextXAlignment.Left
+    infjInfo.Parent = MovePage
+
+    createSection(MovePage, "🛡 Anti-Fling")
 
     createToggle(MovePage, "Enable Anti-Fling", false, function(v)
-        if Features.AntiFling and Features.AntiFling.setEnabled then
-            Features.AntiFling:setEnabled(v)
-        end
+        if Features.AntiFling then Features.AntiFling:setEnabled(v) end
     end)
 
     createSlider(MovePage, "Max Velocity", 50, 800, 220, function(v)
@@ -908,28 +956,30 @@ function UI:init(Features)
         end
     end)
 
-    createSection(MovePage, "Noclip")
+    local afInfo = Instance.new("TextLabel")
+    afInfo.Size = UDim2.new(1, -16, 0, 30)
+    afInfo.BackgroundTransparency = 1
+    afInfo.Text = "Stops sudden speed spikes from launching you"
+    afInfo.TextColor3 = Theme.TextDim
+    afInfo.Font = Enum.Font.Gotham
+    afInfo.TextSize = 11
+    afInfo.TextXAlignment = Enum.TextXAlignment.Left
+    afInfo.Parent = MovePage
 
+    createSection(MovePage, "Noclip")
     createToggle(MovePage, "Enable Noclip", false, function(v)
-        if Features.Noclip and Features.Noclip.setEnabled then
-            Features.Noclip:setEnabled(v)
-        end
+        if Features.Noclip then Features.Noclip:setEnabled(v) end
     end)
 
     createSection(MovePage, "Auto Gun")
-
     createToggle(MovePage, "Auto Pickup Gun", false, function(v)
-        if Features.AutoGun and Features.AutoGun.setEnabled then
-            Features.AutoGun:setEnabled(v)
-        end
+        if Features.AutoGun then Features.AutoGun:setEnabled(v) end
     end)
 
-    createSection(MovePage, "Auto Farm")
+    createSection(MovePage, "💰 Auto Farm")
 
     createToggle(MovePage, "Enable Auto Farm", false, function(v)
-        if Features.AutoFarm and Features.AutoFarm.setEnabled then
-            Features.AutoFarm:setEnabled(v)
-        end
+        if Features.AutoFarm then Features.AutoFarm:setEnabled(v) end
     end)
 
     createToggle(MovePage, "Auto Fling Murderer", true, function(v)
@@ -938,34 +988,160 @@ function UI:init(Features)
         end
     end)
 
-    createSection(MovePage, "Speed")
+    local farmInfo = Instance.new("TextLabel")
+    farmInfo.Size = UDim2.new(1, -16, 0, 30)
+    farmInfo.BackgroundTransparency = 1
+    farmInfo.Text = "Flies through walls to collect coins (Speed: 22)"
+    farmInfo.TextColor3 = Theme.TextDim
+    farmInfo.Font = Enum.Font.Gotham
+    farmInfo.TextSize = 11
+    farmInfo.TextXAlignment = Enum.TextXAlignment.Left
+    farmInfo.Parent = MovePage
 
-    createToggle(MovePage, "Enable Speed", false, function(v)
-        if Features.Speed and Features.Speed.setEnabled then
-            Features.Speed:setEnabled(v)
+    createSection(MovePage, "💥 Auto Kill Murderer")
+
+    createToggle(MovePage, "Enable Auto Kill Murder", false, function(v)
+        if Features.AutoFarm and Features.AutoFarm.setAutoKill then
+            Features.AutoFarm:setAutoKill(v)
         end
     end)
 
+    createSlider(MovePage, "Kill Delay (sec)", 1, 10, 3, function(v)
+        if Features.AutoFarm and Features.AutoFarm.setKillDelay then
+            Features.AutoFarm:setKillDelay(v)
+        end
+    end)
+
+    createSection(MovePage, "Speed")
+    createToggle(MovePage, "Enable Speed", false, function(v)
+        if Features.Speed then Features.Speed:setEnabled(v) end
+    end)
     createSlider(MovePage, "Speed Value", 16, 200, 32, function(v)
         if Features.Speed and Features.Speed.setValue then
             Features.Speed:setValue(v)
         end
     end)
 
-    -- ANIMATION
+    --// ==================================================
+    --// ANIMATION TAB
+    --// ==================================================
+    createSection(AnimationPage, "R15 Animation Sets")
+
+    local animInfoFrame = Instance.new("Frame")
+    animInfoFrame.Size = UDim2.new(1, -16, 0, 40)
+    animInfoFrame.BackgroundColor3 = Theme.Element
+    animInfoFrame.BorderSizePixel = 0
+    animInfoFrame.Parent = AnimationPage
+    corner(animInfoFrame, 8)
+
+    local animInfoText = Instance.new("TextLabel")
+    animInfoText.Size = UDim2.new(1, -20, 1, 0)
+    animInfoText.Position = UDim2.new(0, 10, 0, 0)
+    animInfoText.BackgroundTransparency = 1
+    animInfoText.Text = "Works only on R15 characters. Click to apply."
+    animInfoText.TextColor3 = Theme.TextDim
+    animInfoText.Font = Enum.Font.Gotham
+    animInfoText.TextSize = 11
+    animInfoText.TextXAlignment = Enum.TextXAlignment.Left
+    animInfoText.TextYAlignment = Enum.TextYAlignment.Center
+    animInfoText.Parent = animInfoFrame
+
+    local animListFrame = Instance.new("Frame")
+    animListFrame.Size = UDim2.new(1, -16, 0, 400)
+    animListFrame.BackgroundColor3 = Theme.Element
+    animListFrame.BorderSizePixel = 0
+    animListFrame.Parent = AnimationPage
+    corner(animListFrame, 8)
+
+    local animScroll = Instance.new("ScrollingFrame")
+    animScroll.Size = UDim2.new(1, -8, 1, -8)
+    animScroll.Position = UDim2.new(0, 4, 0, 4)
+    animScroll.BackgroundTransparency = 1
+    animScroll.BorderSizePixel = 0
+    animScroll.ScrollBarThickness = 3
+    animScroll.ScrollBarImageColor3 = Theme.Accent
+    animScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    animScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    animScroll.Parent = animListFrame
+
+    local animListLayout = Instance.new("UIListLayout")
+    animListLayout.Padding = UDim.new(0, 4)
+    animListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    animListLayout.Parent = animScroll
+
+    local animButtons = {}
+    local activeAnimName = nil
+
+    local function setActiveAnim(name)
+        for animName, btn in pairs(animButtons) do
+            if animName == name then
+                tween(btn, 0.2, {BackgroundColor3 = Theme.Accent})
+                btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            else
+                tween(btn, 0.2, {BackgroundColor3 = Theme.Element})
+                btn.TextColor3 = Theme.Text
+            end
+        end
+        activeAnimName = name
+    end
+
+    if Features.Animation and Features.Animation.getAnimationList then
+        local list = Features.Animation:getAnimationList()
+        for _, name in ipairs(list) do
+            local btn = Instance.new("TextButton")
+            btn.Size = UDim2.new(1, -4, 0, 32)
+            btn.BackgroundColor3 = Theme.Element
+            btn.Text = name
+            btn.TextColor3 = Theme.Text
+            btn.Font = Enum.Font.GothamMedium
+            btn.TextSize = 12
+            btn.BorderSizePixel = 0
+            btn.AutoButtonColor = false
+            btn.Parent = animScroll
+            corner(btn, 6)
+
+            btn.MouseEnter:Connect(function()
+                if activeAnimName ~= name then
+                    tween(btn, 0.15, {BackgroundColor3 = Theme.ElementHov})
+                end
+            end)
+            btn.MouseLeave:Connect(function()
+                if activeAnimName ~= name then
+                    tween(btn, 0.15, {BackgroundColor3 = Theme.Element})
+                end
+            end)
+            btn.MouseButton1Click:Connect(function()
+                createRipple(btn, Mouse.X - btn.AbsolutePosition.X, Mouse.Y - btn.AbsolutePosition.Y)
+                if Features.Animation then
+                    Features.Animation:playAnimationSet(name)
+                    setActiveAnim(name)
+                end
+            end)
+
+            animButtons[name] = btn
+        end
+    end
+
     createSection(AnimationPage, "Controls")
 
     createActionButton(AnimationPage, "RESET ANIMATIONS", Theme.Danger, function()
-        if Features.Animation and Features.Animation.reset then
+        if Features.Animation then
             Features.Animation:reset()
+            for _, btn in pairs(animButtons) do
+                tween(btn, 0.2, {BackgroundColor3 = Theme.Element})
+                btn.TextColor3 = Theme.Text
+            end
+            activeAnimName = nil
         end
     end)
 
-    -- SETTINGS
+    --// ==================================================
+    --// SETTINGS TAB
+    --// ==================================================
     createSection(SettingsPage, "Info")
 
     local infoFrame = Instance.new("Frame")
-    infoFrame.Size = UDim2.new(1, -16, 0, 200)
+    infoFrame.Size = UDim2.new(1, -16, 0, 180)
     infoFrame.BackgroundColor3 = Theme.Element
     infoFrame.BorderSizePixel = 0
     infoFrame.Parent = SettingsPage
@@ -975,7 +1151,7 @@ function UI:init(Features)
     infoText.Size = UDim2.new(1, -20, 1, 0)
     infoText.Position = UDim2.new(0, 10, 0, 0)
     infoText.BackgroundTransparency = 1
-    infoText.Text = "TrustHub v14.1\n\nF4  -  toggle menu\n\nTabs:\nAimbot | Murderer | Fling | Visuals | Movement | Animation | Settings"
+    infoText.Text = "TrustHub v13.0\n\nF4  — toggle menu\n\nTabs:\nAimbot | Murderer | Fling | Visuals | Movement | Animation | Settings"
     infoText.TextColor3 = Theme.TextDim
     infoText.Font = Enum.Font.Gotham
     infoText.TextSize = 12
@@ -983,6 +1159,7 @@ function UI:init(Features)
     infoText.TextYAlignment = Enum.TextYAlignment.Top
     infoText.Parent = infoFrame
 
+    --// Activate first tab
     Tabs["Aimbot"].Page.Visible = true
     ActiveTab = "Aimbot"
     Tabs["Aimbot"].Button.BackgroundColor3 = Theme.PanelLight
@@ -990,7 +1167,9 @@ function UI:init(Features)
     Tabs["Aimbot"].Indicator.Size = UDim2.new(0, 3, 0.7, 0)
     Tabs["Aimbot"].Indicator.Position = UDim2.new(0, 0, 0.15, 0)
     Tabs["Aimbot"].Label.TextColor3 = Theme.Accent
+    Tabs["Aimbot"].Emoji.TextColor3 = Theme.Accent
 
+    --// Open / Close
     local isOpen = false
     local opening = false
 
@@ -1001,28 +1180,19 @@ function UI:init(Features)
         Main.Size = UDim2.new(0, 0, 0, 0)
         tween(Main, 0.35, {Size = UDim2.new(0, 580, 0, 520)}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
         tween(FloatingBtn, 0.25, {BackgroundTransparency = 0.6})
-        task.delay(0.35, function()
-            isOpen = true
-            opening = false
-        end)
+        task.delay(0.35, function() isOpen = true; opening = false end)
     end
 
     local function closePanel()
         if not isOpen then return end
         isOpen = false
         local t = tween(Main, 0.2, {Size = UDim2.new(0, 0, 0, 0)}, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-        t.Completed:Connect(function()
-            Main.Visible = false
-        end)
+        t.Completed:Connect(function() Main.Visible = false end)
         tween(FloatingBtn, 0.25, {BackgroundTransparency = 0})
     end
 
     FloatingBtn.MouseButton1Click:Connect(function()
-        if isOpen then
-            closePanel()
-        else
-            openPanel()
-        end
+        if isOpen then closePanel() else openPanel() end
     end)
 
     CloseBtn.MouseButton1Click:Connect(closePanel)
@@ -1030,16 +1200,12 @@ function UI:init(Features)
     UserInputService.InputBegan:Connect(function(input, gpe)
         if gpe then return end
         if input.KeyCode == Enum.KeyCode.F4 then
-            if isOpen then
-                closePanel()
-            else
-                openPanel()
-            end
+            if isOpen then closePanel() else openPanel() end
         end
     end)
 
+    --// Drag Float
     local draggingFloat, dragFloatStart, floatStartPos
-
     FloatingBtn.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             draggingFloat = true
@@ -1047,7 +1213,6 @@ function UI:init(Features)
             floatStartPos = FloatingBtn.Position
         end
     end)
-
     UserInputService.InputChanged:Connect(function(input)
         if draggingFloat and input.UserInputType == Enum.UserInputType.MouseMovement then
             local delta = input.Position - dragFloatStart
@@ -1057,15 +1222,12 @@ function UI:init(Features)
             )
         end
     end)
-
     UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            draggingFloat = false
-        end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then draggingFloat = false end
     end)
 
+    --// Drag Main
     local dragging, dragStart, startPos
-
     Header.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             dragging = true
@@ -1073,7 +1235,6 @@ function UI:init(Features)
             startPos = Main.Position
         end
     end)
-
     UserInputService.InputChanged:Connect(function(input)
         if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
             local delta = input.Position - dragStart
@@ -1083,11 +1244,8 @@ function UI:init(Features)
             )
         end
     end)
-
     UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = false
-        end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
     end)
 
     task.wait(0.3)

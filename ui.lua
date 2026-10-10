@@ -1,5 +1,5 @@
 --// ==================================================
---// TrustHub UI v13.0 — 7 tabs + Anti-Fling
+--// TrustHub UI v14.0 — 7 tabs + Wings + Waterfall + Body ESP
 --// ==================================================
 
 local TweenService     = game:GetService("TweenService")
@@ -465,7 +465,7 @@ function UI:init(Features)
     VersionLbl.Size = UDim2.new(0, 60, 1, 0)
     VersionLbl.Position = UDim2.new(1, -100, 0, 0)
     VersionLbl.BackgroundTransparency = 1
-    VersionLbl.Text = "v13.0"
+    VersionLbl.Text = "v14.0"
     VersionLbl.TextColor3 = Theme.TextDim
     VersionLbl.Font = Enum.Font.Gotham
     VersionLbl.TextSize = 11
@@ -816,6 +816,119 @@ function UI:init(Features)
     fovInfo.Parent = VisualsPage
 
     --// ==================================================
+    --// WINGS
+    --// ==================================================
+    createSection(VisualsPage, "🪽 Animated Wings")
+
+    createToggle(VisualsPage, "Enable Wings", false, function(v)
+        if Features.Wings then Features.Wings:setEnabled(v) end
+    end)
+
+    createSlider(VisualsPage, "Wing Size", 3, 25, 10, function(v)
+        if Features.Wings and Features.Wings.setSize then Features.Wings:setSize(v) end
+    end)
+
+    createSlider(VisualsPage, "Wing Flap Speed", 1, 20, 6, function(v)
+        if Features.Wings and Features.Wings.setSpeed then Features.Wings:setSpeed(v) end
+    end)
+
+    createSlider(VisualsPage, "Wing Color R", 0, 255, 200, function(v)
+        if Features.Wings and Features.Wings.setColorR then Features.Wings:setColorR(v) end
+    end)
+
+    createSlider(VisualsPage, "Wing Color G", 0, 255, 100, function(v)
+        if Features.Wings and Features.Wings.setColorG then Features.Wings:setColorG(v) end
+    end)
+
+    createSlider(VisualsPage, "Wing Color B", 0, 255, 255, function(v)
+        if Features.Wings and Features.Wings.setColorB then Features.Wings:setColorB(v) end
+    end)
+
+    local wingsInfo = Instance.new("TextLabel")
+    wingsInfo.Size = UDim2.new(1, -16, 0, 20)
+    wingsInfo.BackgroundTransparency = 1
+    wingsInfo.Text = "Animated flapping wings attached to your back"
+    wingsInfo.TextColor3 = Theme.TextDim
+    wingsInfo.Font = Enum.Font.Gotham
+    wingsInfo.TextSize = 11
+    wingsInfo.TextXAlignment = Enum.TextXAlignment.Left
+    wingsInfo.Parent = VisualsPage
+
+    --// ==================================================
+    --// WATERFALL
+    --// ==================================================
+    createSection(VisualsPage, "💧 Waterfall")
+
+    createToggle(VisualsPage, "Enable Waterfall", false, function(v)
+        if Features.Waterfall then Features.Waterfall:setEnabled(v) end
+    end)
+
+    createSlider(VisualsPage, "Waterfall Size", 1, 15, 4, function(v)
+        if Features.Waterfall and Features.Waterfall.setSize then Features.Waterfall:setSize(v) end
+    end)
+
+    createSlider(VisualsPage, "Waterfall Density", 10, 500, 150, function(v)
+        if Features.Waterfall and Features.Waterfall.setDensity then Features.Waterfall:setDensity(v) end
+    end)
+
+    createSlider(VisualsPage, "Waterfall R", 0, 255, 80, function(v)
+        if Features.Waterfall and Features.Waterfall.setColorR then Features.Waterfall:setColorR(v) end
+    end)
+
+    createSlider(VisualsPage, "Waterfall G", 0, 255, 160, function(v)
+        if Features.Waterfall and Features.Waterfall.setColorG then Features.Waterfall:setColorG(v) end
+    end)
+
+    createSlider(VisualsPage, "Waterfall B", 0, 255, 255, function(v)
+        if Features.Waterfall and Features.Waterfall.setColorB then Features.Waterfall:setColorB(v) end
+    end)
+
+    local wfInfo = Instance.new("TextLabel")
+    wfInfo.Size = UDim2.new(1, -16, 0, 20)
+    wfInfo.BackgroundTransparency = 1
+    wfInfo.Text = "Particle waterfall around your character"
+    wfInfo.TextColor3 = Theme.TextDim
+    wfInfo.Font = Enum.Font.Gotham
+    wfInfo.TextSize = 11
+    wfInfo.TextXAlignment = Enum.TextXAlignment.Left
+    wfInfo.Parent = VisualsPage
+
+    --// ==================================================
+    --// BODY ESP
+    --// ==================================================
+    createSection(VisualsPage, "👤 Body ESP (Self)")
+
+    createToggle(VisualsPage, "Enable Body ESP", false, function(v)
+        if Features.BodyESP then Features.BodyESP:setEnabled(v) end
+    end)
+
+    createSlider(VisualsPage, "Body ESP R", 0, 255, 120, function(v)
+        if Features.BodyESP and Features.BodyESP.setColorR then Features.BodyESP:setColorR(v) end
+    end)
+
+    createSlider(VisualsPage, "Body ESP G", 0, 255, 200, function(v)
+        if Features.BodyESP and Features.BodyESP.setColorG then Features.BodyESP:setColorG(v) end
+    end)
+
+    createSlider(VisualsPage, "Body ESP B", 0, 255, 255, function(v)
+        if Features.BodyESP and Features.BodyESP:setColorB then Features.BodyESP:setColorB(v) end
+    end)
+
+    createSlider(VisualsPage, "Body ESP Fill", 0, 1, 0.5, function(v)
+        if Features.BodyESP and Features.BodyESP.setFill then Features.BodyESP:setFill(v) end
+    end)
+
+    local bodyEspInfo = Instance.new("TextLabel")
+    bodyEspInfo.Size = UDim2.new(1, -16, 0, 20)
+    bodyEspInfo.BackgroundTransparency = 1
+    bodyEspInfo.Text = "Highlights your own character"
+    bodyEspInfo.TextColor3 = Theme.TextDim
+    bodyEspInfo.Font = Enum.Font.Gotham
+    bodyEspInfo.TextSize = 11
+    bodyEspInfo.TextXAlignment = Enum.TextXAlignment.Left
+    bodyEspInfo.Parent = VisualsPage
+
+    --// ==================================================
     --// MOVEMENT TAB
     --// ==================================================
 
@@ -857,7 +970,7 @@ function UI:init(Features)
     infjInfo.TextXAlignment = Enum.TextXAlignment.Left
     infjInfo.Parent = MovePage
 
-    --// ANTI-FLING (нове)
+    -- ANTI-FLING
     createSection(MovePage, "🛡 Anti-Fling")
 
     createToggle(MovePage, "Enable Anti-Fling", false, function(v)
@@ -1060,7 +1173,7 @@ function UI:init(Features)
     createSection(SettingsPage, "Info")
 
     local infoFrame = Instance.new("Frame")
-    infoFrame.Size = UDim2.new(1, -16, 0, 180)
+    infoFrame.Size = UDim2.new(1, -16, 0, 200)
     infoFrame.BackgroundColor3 = Theme.Element
     infoFrame.BorderSizePixel = 0
     infoFrame.Parent = SettingsPage
@@ -1070,7 +1183,7 @@ function UI:init(Features)
     infoText.Size = UDim2.new(1, -20, 1, 0)
     infoText.Position = UDim2.new(0, 10, 0, 0)
     infoText.BackgroundTransparency = 1
-    infoText.Text = "TrustHub v13.0\n\nF4  — toggle menu\n\nTabs:\nAimbot | Murderer | Fling | Visuals | Movement | Animation | Settings"
+    infoText.Text = "TrustHub v14.0\n\nF4  — toggle menu\n\nTabs:\nAimbot | Murderer | Fling | Visuals | Movement | Animation | Settings\n\nNew in v14.0:\n🪽 Wings • 💧 Waterfall • 👤 Body ESP"
     infoText.TextColor3 = Theme.TextDim
     infoText.Font = Enum.Font.Gotham
     infoText.TextSize = 12

@@ -1,27 +1,32 @@
 --// ============================================================
---// TrustHub Silent Aim v1.0 — MM2 Edition
---// Raycast + Mouse.Hit hooks, FOV Circle, closest target
+--// TrustHub Silent Aim v2.0 — MM2 Edition
+--// Детальна перевірка ролей (Knife / Revolver / Gun)
+--// Raycast + Mouse.Hit hooks, FOV Circle
 --// ============================================================
 
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
+local Players          = game:GetService("Players")
+local RunService       = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local Workspace = game:GetService("Workspace")
+local Workspace        = game:GetService("Workspace")
+local StarterGui       = game:GetService("StarterGui")
+
 local LocalPlayer = Players.LocalPlayer
+local Camera      = Workspace.CurrentCamera
 
 --// ============================================================
 --//  CONFIG
 --// ============================================================
 local Config = {
-    Enabled        = false,
-    FOV            = 150,           -- радіус пошуку (пікселів)
-    ShowFOV        = true,
-    TargetPart     = "Head",        -- "Head" або "HumanoidRootPart"
-    TeamCheck      = true,          -- ігнорувати Murderer'а (щоб не вбити шерифа?)
-    WallCheck      = true,          -- не стріляти крізь стіни
-    HitChance      = 100,           -- % влучань
-    Prediction     = 0.135,         -- компенсація руху цілі
-    Method         = "Raycast",     -- "Raycast" або "Mouse"
+    Enabled      = false,
+    FOV          = 150,
+    ShowFOV      = true,
+    TargetPart   = "Head",
+    TeamCheck    = false,       -- для MM2: не стріляти в Sheriff
+    WallCheck    = true,
+    HitChance    = 100,
+    Prediction   = 0.135,
+    AimAtRole    = "Any",       -- "Any" | "Murderer" | "Sheriff"
+    Verbose      = true,
 }
 
 --// ============================================================
@@ -34,7 +39,10 @@ local oldIndex      = nil
 local oldNamecall   = nil
 local hookedIndex   = false
 local hookedNamecall= false
-local cachedChar    = nil
+
+local function log(msg)
+    if Config.Verbose then print("[SilentAim] " .. tostring(msg)) end
+end
 
 --// ============================================================
 --//  FOV CIRCLE (Drawing API)
@@ -52,9 +60,35 @@ if hasDrawing then
     fovCircle.Color = Color3.fromRGB(255, 60, 60)
     fovCircle.Transparency = 0.6
     fovCircle.Visible = false
-    print("[SilentAim] FOV circle created (Drawing API)")
+    log("FOV circle created (Drawing API)")
 else
     warn("[SilentAim] Drawing API unavailable")
+end
+
+--// ============================================================
+--//  ROLE DETECTION (з сурсу)
+--// ============================================================
+local function getRole(plr)
+    if not plr or not plr.Character then return "Innocent" end
+
+    --// Перевірка Backpack
+    local backpack = plr:FindFirstChild("Backpack")
+    if backpack then
+        for _, tool in ipairs(backpack:GetChildren()) do
+            if tool.Name == "Knife" then return "Murderer" end
+            if tool.Name == "Revolver" or tool.Name == "Gun" then return "Sheriff" end
+        end
+    end
+
+    --// Перевірка Character (тримає в руках)
+    for _, tool in ipairs(plr.Character:GetChildren()) do
+        if tool:IsA("Tool") then
+            if tool.Name == "Knife" then return "Murderer" end
+            if tool.Name == "Revolver" or tool.Name == "Gun" then return "Sheriff" end
+        end
+    end
+
+    return "Innocent"
 end
 
 --// ============================================================
@@ -72,36 +106,29 @@ end
 local function getTargetPart(plr)
     local char = getChar(plr)
     if not char then return nil end
-    return char:FindFirstChild(Config.TargetPart) or char:FindFirstChild("HumanoidRootPart")
+    if Config.TargetPart == "Head" then
+        return char:FindFirstChild("Head")
+    elseif Config.TargetPart == "Torso" then
+        return char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
+    else
+        return char:FindFirstChild("HumanoidRootPart")
+    end
 end
 
 local function isVisible(part)
     if not Config.WallCheck then return true end
-    local origin = Workspace.CurrentCamera.CFrame.Position
+    local origin = Camera.CFrame.Position
     local dir = part.Position - origin
     local params = RaycastParams.new()
     params.FilterType = Enum.RaycastFilterType.Exclude
-    params.FilterDescendantsInstances = { LocalPlayer.Character, Workspace.CurrentCamera, part.Parent }
-    local result = Workspace:Raycast(origin, dir, params)
-    return result == nil
-end
-
-local function getRole(plr)
-    --// Спрощена перевірка ролі в MM2 (за назвою інструментів)
-    local char = plr.Character
-    if not char then return "Innocent" end
-    for _, tool in ipairs(char:GetChildren()) do
-        if tool:IsA("Tool") then
-            local n = tool.Name:lower()
-            if n:find("knife") then return "Murderer" end
-            if n:find("gun") or n:find("pistol") then return "Sheriff" end
-        end
-    end
-    return "Innocent"
+    params.FilterDescendantsInstances = {
+        LocalPlayer.Character, Camera, part.Parent,
+    }
+    return Workspace:Raycast(origin, dir, params) == nil
 end
 
 --// ============================================================
---//  FIND CLOSEST TARGET
+--//  FIND CLOSEST PLAYER (з урахуванням ролі)
 --// ============================================================
 local function findClosestPlayer()
     local mousePos = UserInputService:GetMouseLocation()
@@ -111,16 +138,23 @@ local function findClosestPlayer()
         if plr ~= LocalPlayer then
             local part = getTargetPart(plr)
             if part then
-                --// Team Check (можна налаштувати під MM2: не стріляти в Murderer'а, якщо ми Sheriff)
+                --// Перевірка ролі
+                local role = getRole(plr)
                 local skip = false
-                if Config.TeamCheck then
-                    local role = getRole(plr)
-                    --// Приклад: якщо ми Sheriff — не стріляємо в Innocent/Sheriff
-                    --// Тут можна додати логіку для MM2
+
+                if Config.AimAtRole == "Murderer" and role ~= "Murderer" then
+                    skip = true
+                elseif Config.AimAtRole == "Sheriff" and role ~= "Sheriff" then
+                    skip = true
+                end
+
+                --// Team Check (не стріляти в Sheriff'а, якщо він наш союзник)
+                if Config.TeamCheck and role == "Sheriff" then
+                    skip = true
                 end
 
                 if not skip then
-                    local screenPos, onScreen = Workspace.CurrentCamera:WorldToViewportPoint(part.Position)
+                    local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
                     if onScreen then
                         local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
                         if dist < bestDist and isVisible(part) then
@@ -151,7 +185,7 @@ local function hookIndex()
                 local mouse = LocalPlayer:GetMouse()
                 if self == mouse and (key == "Hit" or key == "Target") then
                     local targetPart = getTargetPart(currentTarget)
-                    if targetPart then
+                    if targetPart and math.random(1, 100) <= Config.HitChance then
                         if key == "Hit" then
                             return CFrame.new(targetPart.Position)
                         elseif key == "Target" then
@@ -165,7 +199,7 @@ local function hookIndex()
 
         setreadonly(mt, true)
         hookedIndex = true
-        print("[SilentAim] __index hook installed (Mouse.Hit)")
+        log("__index hook installed (Mouse.Hit)")
     end)
     if not ok then warn("[SilentAim] __index hook failed: " .. tostring(err)) end
 end
@@ -189,17 +223,12 @@ local function hookNamecall()
                 if self == Workspace and (method == "Raycast" or method == "FindPartOnRay") then
                     local targetPart = getTargetPart(currentTarget)
                     if targetPart and math.random(1, 100) <= Config.HitChance then
-                        --// Підміна напрямку на ціль
-                        if method == "Raycast" then
-                            --// args[1] = origin, args[2] = direction
-                            if #args >= 2 then
-                                args[2] = (targetPart.Position - args[1]).Unit * (args[2].Magnitude or 1000)
-                            end
-                        elseif method == "FindPartOnRay" then
-                            --// args[1] = ray
-                            if args[1] then
-                                args[1] = Ray.new(args[1].Origin, (targetPart.Position - args[1].Origin))
-                            end
+                        if method == "Raycast" and #args >= 2 then
+                            local origin = args[1]
+                            local dir = targetPart.Position - origin
+                            args[2] = dir.Unit * (args[2].Magnitude or 1000)
+                        elseif method == "FindPartOnRay" and args[1] then
+                            args[1] = Ray.new(args[1].Origin, targetPart.Position - args[1].Origin)
                         end
                     end
                 end
@@ -209,7 +238,7 @@ local function hookNamecall()
 
         setreadonly(mt, true)
         hookedNamecall = true
-        print("[SilentAim] __namecall hook installed (Raycast)")
+        log("__namecall hook installed (Raycast)")
     end)
     if not ok then warn("[SilentAim] __namecall hook failed: " .. tostring(err)) end
 end
@@ -244,16 +273,17 @@ RunService.RenderStepped:Connect(function()
         fovCircle.Position = mousePos
         fovCircle.Radius = Config.FOV
         fovCircle.Visible = Config.Enabled and Config.ShowFOV
-        fovCircle.Color = currentTarget and Color3.fromRGB(255, 60, 60) or Color3.fromRGB(255, 200, 200)
+        fovCircle.Color = currentTarget
+            and Color3.fromRGB(255, 60, 60)
+            or  Color3.fromRGB(255, 200, 200)
     end
 
     if not Config.Enabled then return end
-
     currentTarget = findClosestPlayer()
 end)
 
 --// ============================================================
---//  MODULE API (для UI)
+--//  MODULE API
 --// ============================================================
 local SilentAim = {}
 SilentAim.__index = SilentAim
@@ -265,47 +295,50 @@ end
 function SilentAim:setEnabled(state)
     Config.Enabled = state
     if state then
-        if Config.Method == "Raycast" then hookNamecall() end
-        if Config.Method == "Mouse" then hookIndex() end
-        --// Встановлюємо обидва для надійності
         hookIndex()
         hookNamecall()
-        print("[SilentAim] ═══ ENABLED ═══")
+        log("═══ ENABLED ═══")
+        pcall(function()
+            StarterGui:SetCore("SendNotification", {
+                Title = "🎯 Silent Aim", Text = "Enabled", Duration = 2,
+            })
+        end)
     else
         unhookAll()
         currentTarget = nil
-        print("[SilentAim] ═══ DISABLED ═══")
+        log("═══ DISABLED ═══")
     end
 end
 
-function SilentAim:setFOV(v)
-    Config.FOV = math.clamp(v, 10, 800)
-    print("[SilentAim] FOV set to " .. Config.FOV)
-end
-
+function SilentAim:setFOV(v) Config.FOV = math.clamp(v, 10, 800) end
 function SilentAim:setShowFOV(v) Config.ShowFOV = v end
 function SilentAim:setTargetPart(v) Config.TargetPart = v end
 function SilentAim:setTeamCheck(v) Config.TeamCheck = v end
 function SilentAim:setWallCheck(v) Config.WallCheck = v end
 function SilentAim:setHitChance(v) Config.HitChance = math.clamp(v, 1, 100) end
 function SilentAim:setPrediction(v) Config.Prediction = v end
+function SilentAim:setAimAtRole(v) Config.AimAtRole = v end
+function SilentAim:setMethod() end
+
+function SilentAim:getRole(plr) return getRole(plr) end
 
 function SilentAim:getStats()
     return {
         Enabled = Config.Enabled,
         Target  = currentTarget and currentTarget.Name or "None",
+        Role    = currentTarget and getRole(currentTarget) or "None",
         FOV     = Config.FOV,
     }
 end
 
---// Cleanup при виході
 game:BindToClose(function()
     if Config.Enabled then unhookAll() end
-    if fovCircle then fovCircle:Remove() end
+    if fovCircle then pcall(function() fovCircle:Remove() end) end
 end)
 
-print("═══════════════════════════════")
-print("TrustHub Silent Aim v1.0 — Loaded")
-print("═══════════════════════════════")
+log("═══════════════════════════════")
+log("TrustHub Silent Aim v2.0 — MM2")
+log("Knife/Revolver/Gun detection")
+log("═══════════════════════════════")
 
 return SilentAim.new()

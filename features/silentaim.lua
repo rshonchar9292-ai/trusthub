@@ -1,7 +1,6 @@
 --// ============================================================
---// TrustHub Silent Aim v2.0 — MM2 Edition
---// Детальна перевірка ролей (Knife / Revolver / Gun)
---// Raycast + Mouse.Hit hooks, FOV Circle
+--// TrustHub Silent Aim v3.0 — Sendox-style
+--// Module for MM2, controlled from ui.lua
 --// ============================================================
 
 local Players          = game:GetService("Players")
@@ -12,36 +11,47 @@ local StarterGui       = game:GetService("StarterGui")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera      = Workspace.CurrentCamera
+local Mouse       = LocalPlayer:GetMouse()
 
 --// ============================================================
---//  CONFIG
+--//  OBFUSCATION STUB (Luraph-compatible)
 --// ============================================================
-local Config = {
-    Enabled      = false,
-    FOV          = 150,
-    ShowFOV      = true,
-    TargetPart   = "Head",
-    TeamCheck    = false,       -- для MM2: не стріляти в Sheriff
-    WallCheck    = true,
-    HitChance    = 100,
-    Prediction   = 0.135,
-    AimAtRole    = "Any",       -- "Any" | "Murderer" | "Sheriff"
-    Verbose      = true,
+local LPH_NO_VIRTUALIZE = LPH_NO_VIRTUALIZE or function(fn)
+    return fn
+end
+
+--// ============================================================
+--//  MODULE + CONFIG
+--// ============================================================
+local Module = {}
+Module.__index = Module
+
+Module.Config = {
+    Enabled     = false,
+    FOV         = 150,
+    HitChance   = 100,
+    TargetPart  = "Head",           -- "Head" | "HumanoidRootPart" | "UpperTorso"
+    WallCheck   = true,
+    TeamCheck   = false,
+    ShowFOV     = true,
+    CircleColor = Color3.fromRGB(255, 60, 60),
 }
+
+local Config = Module.Config
 
 --// ============================================================
 --//  STATE
 --// ============================================================
-local enabled       = false
 local currentTarget = nil
 local fovCircle     = nil
 local oldIndex      = nil
-local oldNamecall   = nil
-local hookedIndex   = false
-local hookedNamecall= false
+local hooked        = false
 
+--// ============================================================
+--//  LOG
+--// ============================================================
 local function log(msg)
-    if Config.Verbose then print("[SilentAim] " .. tostring(msg)) end
+    print("[SilentAim] " .. tostring(msg))
 end
 
 --// ============================================================
@@ -57,44 +67,18 @@ if hasDrawing then
     fovCircle.Thickness = 1.5
     fovCircle.NumSides = 64
     fovCircle.Filled = false
-    fovCircle.Color = Color3.fromRGB(255, 60, 60)
+    fovCircle.Color = Config.CircleColor
     fovCircle.Transparency = 0.6
     fovCircle.Visible = false
-    log("FOV circle created (Drawing API)")
+    log("FOV circle: Drawing API")
 else
     warn("[SilentAim] Drawing API unavailable")
 end
 
 --// ============================================================
---//  ROLE DETECTION (з сурсу)
---// ============================================================
-local function getRole(plr)
-    if not plr or not plr.Character then return "Innocent" end
-
-    --// Перевірка Backpack
-    local backpack = plr:FindFirstChild("Backpack")
-    if backpack then
-        for _, tool in ipairs(backpack:GetChildren()) do
-            if tool.Name == "Knife" then return "Murderer" end
-            if tool.Name == "Revolver" or tool.Name == "Gun" then return "Sheriff" end
-        end
-    end
-
-    --// Перевірка Character (тримає в руках)
-    for _, tool in ipairs(plr.Character:GetChildren()) do
-        if tool:IsA("Tool") then
-            if tool.Name == "Knife" then return "Murderer" end
-            if tool.Name == "Revolver" or tool.Name == "Gun" then return "Sheriff" end
-        end
-    end
-
-    return "Innocent"
-end
-
---// ============================================================
 --//  HELPERS
 --// ============================================================
-local function getChar(plr)
+local function getAliveChar(plr)
     local char = plr.Character
     if not char then return nil end
     local hum = char:FindFirstChildOfClass("Humanoid")
@@ -104,15 +88,16 @@ local function getChar(plr)
 end
 
 local function getTargetPart(plr)
-    local char = getChar(plr)
+    local char = getAliveChar(plr)
     if not char then return nil end
-    if Config.TargetPart == "Head" then
-        return char:FindFirstChild("Head")
-    elseif Config.TargetPart == "Torso" then
-        return char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
-    else
-        return char:FindFirstChild("HumanoidRootPart")
-    end
+    return char:FindFirstChild(Config.TargetPart)
+        or char:FindFirstChild("Head")
+        or char:FindFirstChild("HumanoidRootPart")
+end
+
+local function isOnScreen(part)
+    local _, onScreen = Camera:WorldToViewportPoint(part.Position)
+    return onScreen
 end
 
 local function isVisible(part)
@@ -128,39 +113,27 @@ local function isVisible(part)
 end
 
 --// ============================================================
---//  FIND CLOSEST PLAYER (з урахуванням ролі)
+--//  1. CLOSEST PLAYER
 --// ============================================================
-local function findClosestPlayer()
+local function closestPlayer()
     local mousePos = UserInputService:GetMouseLocation()
     local best, bestDist = nil, Config.FOV
 
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= LocalPlayer then
-            local part = getTargetPart(plr)
-            if part then
-                --// Перевірка ролі
-                local role = getRole(plr)
-                local skip = false
+            local skip = Config.TeamCheck
+                and plr.Team ~= nil
+                and plr.Team == LocalPlayer.Team
 
-                if Config.AimAtRole == "Murderer" and role ~= "Murderer" then
-                    skip = true
-                elseif Config.AimAtRole == "Sheriff" and role ~= "Sheriff" then
-                    skip = true
-                end
+            if not skip then
+                local part = getTargetPart(plr)
+                if part and isOnScreen(part) then
+                    local screenPos = Camera:WorldToViewportPoint(part.Position)
+                    local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
 
-                --// Team Check (не стріляти в Sheriff'а, якщо він наш союзник)
-                if Config.TeamCheck and role == "Sheriff" then
-                    skip = true
-                end
-
-                if not skip then
-                    local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
-                    if onScreen then
-                        local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
-                        if dist < bestDist and isVisible(part) then
-                            bestDist = dist
-                            best = plr
-                        end
+                    if dist < bestDist and isVisible(part) then
+                        bestDist = dist
+                        best = part
                     end
                 end
             end
@@ -170,175 +143,154 @@ local function findClosestPlayer()
 end
 
 --// ============================================================
---//  HOOK: __index (Mouse.Hit / Mouse.Target)
+--//  2. SHOULD HIT (Hit Chance)
 --// ============================================================
-local function hookIndex()
-    if hookedIndex then return end
-    local ok, err = pcall(function()
-        local mt = getrawmetatable(game)
-        if not mt then error("No metatable") end
-        oldIndex = mt.__index
-        setreadonly(mt, false)
+local function shouldHit()
+    return math.random(1, 100) <= Config.HitChance
+end
 
-        mt.__index = newcclosure(function(self, key)
-            if not checkcaller() and Config.Enabled and currentTarget then
-                local mouse = LocalPlayer:GetMouse()
-                if self == mouse and (key == "Hit" or key == "Target") then
-                    local targetPart = getTargetPart(currentTarget)
-                    if targetPart and math.random(1, 100) <= Config.HitChance then
-                        if key == "Hit" then
-                            return CFrame.new(targetPart.Position)
-                        elseif key == "Target" then
-                            return targetPart
+--// ============================================================
+--//  3. SAFE HOOK (__index)
+--// ============================================================
+local function installHook()
+    if hooked then return end
+
+    local ok, err = pcall(function()
+        --// 4. LPH_NO_VIRTUALIZE wrapper (для майбутньої обфускації)
+        LPH_NO_VIRTUALIZE(function()
+            oldIndex = hookmetamethod(game, "__index", function(self, key)
+                --// Тільки для non-caller'ів (захист від рекурсії)
+                if not checkcaller() and Config.Enabled then
+                    --// Перевірка: self == Mouse, key == "Hit"
+                    if self == Mouse and key == "Hit" then
+                        --// Перевірка цілі та шансу
+                        if currentTarget
+                            and currentTarget.Parent
+                            and shouldHit()
+                        then
+                            return CFrame.new(currentTarget.Position)
                         end
                     end
                 end
-            end
-            return oldIndex(self, key)
-        end)
-
-        setreadonly(mt, true)
-        hookedIndex = true
-        log("__index hook installed (Mouse.Hit)")
+                --// Fallback — оригінальна логіка
+                return oldIndex(self, key)
+            end)
+        end)()
     end)
-    if not ok then warn("[SilentAim] __index hook failed: " .. tostring(err)) end
-end
 
---// ============================================================
---//  HOOK: __namecall (workspace:Raycast)
---// ============================================================
-local function hookNamecall()
-    if hookedNamecall then return end
-    local ok, err = pcall(function()
-        local mt = getrawmetatable(game)
-        if not mt then error("No metatable") end
-        oldNamecall = mt.__namecall
-        setreadonly(mt, false)
-
-        mt.__namecall = newcclosure(function(self, ...)
-            local method = getnamecallmethod()
-            local args = {...}
-
-            if not checkcaller() and Config.Enabled and currentTarget then
-                if self == Workspace and (method == "Raycast" or method == "FindPartOnRay") then
-                    local targetPart = getTargetPart(currentTarget)
-                    if targetPart and math.random(1, 100) <= Config.HitChance then
-                        if method == "Raycast" and #args >= 2 then
-                            local origin = args[1]
-                            local dir = targetPart.Position - origin
-                            args[2] = dir.Unit * (args[2].Magnitude or 1000)
-                        elseif method == "FindPartOnRay" and args[1] then
-                            args[1] = Ray.new(args[1].Origin, targetPart.Position - args[1].Origin)
-                        end
-                    end
-                end
-            end
-            return oldNamecall(self, unpack(args))
-        end)
-
-        setreadonly(mt, true)
-        hookedNamecall = true
-        log("__namecall hook installed (Raycast)")
-    end)
-    if not ok then warn("[SilentAim] __namecall hook failed: " .. tostring(err)) end
-end
-
-local function unhookAll()
-    if hookedIndex and oldIndex then
-        pcall(function()
-            local mt = getrawmetatable(game)
-            setreadonly(mt, false)
-            mt.__index = oldIndex
-            setreadonly(mt, true)
-        end)
-        hookedIndex = false
-    end
-    if hookedNamecall and oldNamecall then
-        pcall(function()
-            local mt = getrawmetatable(game)
-            setreadonly(mt, false)
-            mt.__namecall = oldNamecall
-            setreadonly(mt, true)
-        end)
-        hookedNamecall = false
+    if ok then
+        hooked = true
+        log("✓ __index hook installed")
+    else
+        warn("[SilentAim] Hook failed: " .. tostring(err))
     end
 end
 
+local function uninstallHook()
+    if not hooked or not oldIndex then return end
+    pcall(function()
+        LPH_NO_VIRTUALIZE(function()
+            hookmetamethod(game, "__index", oldIndex)
+        end)()
+    end)
+    hooked = false
+    oldIndex = nil
+    log("✗ __index hook removed")
+end
+
 --// ============================================================
---//  MAIN LOOP
+--//  MAIN LOOP (RenderStepped)
 --// ============================================================
 RunService.RenderStepped:Connect(function()
+    --// FOV circle update
     if fovCircle then
-        local mousePos = UserInputService:GetMouseLocation()
-        fovCircle.Position = mousePos
+        fovCircle.Position = UserInputService:GetMouseLocation()
         fovCircle.Radius = Config.FOV
         fovCircle.Visible = Config.Enabled and Config.ShowFOV
         fovCircle.Color = currentTarget
             and Color3.fromRGB(255, 60, 60)
-            or  Color3.fromRGB(255, 200, 200)
+            or  Config.CircleColor
     end
 
-    if not Config.Enabled then return end
-    currentTarget = findClosestPlayer()
+    --// Target update
+    if not Config.Enabled then
+        currentTarget = nil
+        return
+    end
+    currentTarget = closestPlayer()
 end)
 
 --// ============================================================
---//  MODULE API
+--//  PUBLIC API (для ui.lua)
 --// ============================================================
-local SilentAim = {}
-SilentAim.__index = SilentAim
-
-function SilentAim.new()
-    return setmetatable({}, SilentAim)
-end
-
-function SilentAim:setEnabled(state)
+function Module:setEnabled(state)
     Config.Enabled = state
     if state then
-        hookIndex()
-        hookNamecall()
-        log("═══ ENABLED ═══")
+        installHook()
+        log("═══ ENABLED (FOV: " .. Config.FOV .. ", Hit: " .. Config.HitChance .. "%) ═══")
         pcall(function()
             StarterGui:SetCore("SendNotification", {
-                Title = "🎯 Silent Aim", Text = "Enabled", Duration = 2,
+                Title = "🎯 Silent Aim",
+                Text  = "Enabled",
+                Duration = 2,
             })
         end)
     else
-        unhookAll()
+        uninstallHook()
         currentTarget = nil
         log("═══ DISABLED ═══")
     end
 end
 
-function SilentAim:setFOV(v) Config.FOV = math.clamp(v, 10, 800) end
-function SilentAim:setShowFOV(v) Config.ShowFOV = v end
-function SilentAim:setTargetPart(v) Config.TargetPart = v end
-function SilentAim:setTeamCheck(v) Config.TeamCheck = v end
-function SilentAim:setWallCheck(v) Config.WallCheck = v end
-function SilentAim:setHitChance(v) Config.HitChance = math.clamp(v, 1, 100) end
-function SilentAim:setPrediction(v) Config.Prediction = v end
-function SilentAim:setAimAtRole(v) Config.AimAtRole = v end
-function SilentAim:setMethod() end
+function Module:setFOV(v)
+    Config.FOV = math.clamp(v, 10, 800)
+end
 
-function SilentAim:getRole(plr) return getRole(plr) end
+function Module:setHitChance(v)
+    Config.HitChance = math.clamp(v, 1, 100)
+end
 
-function SilentAim:getStats()
+function Module:setTargetPart(v)
+    Config.TargetPart = v
+end
+
+function Module:setWallCheck(v)
+    Config.WallCheck = v
+end
+
+function Module:setTeamCheck(v)
+    Config.TeamCheck = v
+end
+
+function Module:setShowFOV(v)
+    Config.ShowFOV = v
+end
+
+function Module:getStats()
     return {
         Enabled = Config.Enabled,
         Target  = currentTarget and currentTarget.Name or "None",
-        Role    = currentTarget and getRole(currentTarget) or "None",
         FOV     = Config.FOV,
+        Hooked  = hooked,
     }
 end
 
+--// ============================================================
+--//  CLEANUP
+--// ============================================================
 game:BindToClose(function()
-    if Config.Enabled then unhookAll() end
-    if fovCircle then pcall(function() fovCircle:Remove() end) end
+    uninstallHook()
+    if fovCircle then
+        pcall(function() fovCircle:Remove() end)
+    end
 end)
 
+--// ============================================================
+--//  INIT LOG
+--// ============================================================
 log("═══════════════════════════════")
-log("TrustHub Silent Aim v2.0 — MM2")
-log("Knife/Revolver/Gun detection")
+log("TrustHub Silent Aim v3.0")
+log("Sendox-style • __index Hook")
 log("═══════════════════════════════")
 
-return SilentAim.new()
+return Module

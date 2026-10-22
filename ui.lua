@@ -1,5 +1,5 @@
 --// ==================================================
---// TrustHub UI v14.2 — 7 tabs + High Jump
+--// TrustHub UI v15.0 — Фінальна версія (7 вкладок)
 --// ==================================================
 
 local TweenService     = game:GetService("TweenService")
@@ -119,7 +119,7 @@ local function createToggle(parent, text, default, callback)
         tween(Dot, 0.25, {
             Position = state and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
         }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-        callback(state)
+        if callback then callback(state) end
     end)
 
     Btn.MouseEnter:Connect(function() tween(Btn, 0.15, {BackgroundColor3 = Theme.ElementHov}) end)
@@ -188,7 +188,7 @@ local function createSlider(parent, text, min, max, default, callback)
         Fill.Size = UDim2.new(alpha, 0, 1, 0)
         Knob.Position = UDim2.new(alpha, 0, 0.5, 0)
         ValueLbl.Text = tostring(value)
-        callback(value)
+        if callback then callback(value) end
     end
 
     Bar.InputBegan:Connect(function(input)
@@ -254,7 +254,7 @@ local function createActionButton(parent, text, color, callback)
     Btn.MouseLeave:Connect(function() tween(Btn, 0.15, {Size = UDim2.new(1, -16, 0, 46)}) end)
     Btn.MouseButton1Click:Connect(function()
         createRipple(Btn, Mouse.X - Btn.AbsolutePosition.X, Mouse.Y - Btn.AbsolutePosition.Y)
-        callback()
+        if callback then callback() end
     end)
     return Btn
 end
@@ -303,7 +303,7 @@ local function createPlayerRow(parent, plr, role, roleColor, callback)
     row.MouseLeave:Connect(function() tween(row, 0.15, {BackgroundColor3 = Theme.Element}) end)
     row.MouseButton1Click:Connect(function()
         createRipple(row, Mouse.X - row.AbsolutePosition.X, Mouse.Y - row.AbsolutePosition.Y)
-        callback(plr)
+        if callback then callback(plr) end
     end)
     return row
 end
@@ -428,7 +428,7 @@ function UI:init(Features)
     VersionLbl.Size = UDim2.new(0, 60, 1, 0)
     VersionLbl.Position = UDim2.new(1, -100, 0, 0)
     VersionLbl.BackgroundTransparency = 1
-    VersionLbl.Text = "v14.2"
+    VersionLbl.Text = "v15.0"
     VersionLbl.TextColor3 = Theme.TextDim
     VersionLbl.Font = Enum.Font.Gotham
     VersionLbl.TextSize = 11
@@ -745,7 +745,6 @@ function UI:init(Features)
     legendText.TextYAlignment = Enum.TextYAlignment.Center
     legendText.Parent = legendFrame
 
-    --// FOV
     createSection(VisualsPage, "Camera FOV")
 
     createToggle(VisualsPage, "Enable FOV Changer", false, function(v)
@@ -766,7 +765,6 @@ function UI:init(Features)
     fovInfo.TextXAlignment = Enum.TextXAlignment.Left
     fovInfo.Parent = VisualsPage
 
-    --// WINGS
     createSection(VisualsPage, "🪽 Animated Wings")
 
     createToggle(VisualsPage, "Enable Wings", false, function(v)
@@ -793,7 +791,6 @@ function UI:init(Features)
         if Features.Wings and Features.Wings.setColorB then Features.Wings:setColorB(v) end
     end)
 
-    --// WATERFALL
     createSection(VisualsPage, "💧 Waterfall")
 
     createToggle(VisualsPage, "Enable Waterfall", false, function(v)
@@ -820,7 +817,6 @@ function UI:init(Features)
         if Features.Waterfall and Features.Waterfall.setColorB then Features.Waterfall:setColorB(v) end
     end)
 
-    --// BODY ESP
     createSection(VisualsPage, "👤 Body ESP (Self)")
 
     createToggle(VisualsPage, "Enable Body ESP", false, function(v)
@@ -860,7 +856,6 @@ function UI:init(Features)
         if Features.Fly and Features.Fly.setSpeed then Features.Fly:setSpeed(v) end
     end)
 
-    --// HIGH JUMP (НОВЕ)
     createSection(MovePage, "🦘 High Jump")
 
     createToggle(MovePage, "Enable High Jump", false, function(v)
@@ -883,7 +878,6 @@ function UI:init(Features)
     hjInfo.TextXAlignment = Enum.TextXAlignment.Left
     hjInfo.Parent = MovePage
 
-    --// INFINITE JUMP
     createSection(MovePage, "🦘 Infinite Jump")
 
     createToggle(MovePage, "Enable Infinite Jump", false, function(v)
@@ -900,7 +894,6 @@ function UI:init(Features)
     infjInfo.TextXAlignment = Enum.TextXAlignment.Left
     infjInfo.Parent = MovePage
 
-    --// ANTI-FLING
     createSection(MovePage, "🛡 Anti-Fling")
 
     createToggle(MovePage, "Enable Anti-Fling", false, function(v)
@@ -913,19 +906,16 @@ function UI:init(Features)
         end
     end)
 
-    --// NOCLIP
     createSection(MovePage, "Noclip")
     createToggle(MovePage, "Enable Noclip", false, function(v)
         if Features.Noclip then Features.Noclip:setEnabled(v) end
     end)
 
-    --// AUTO GUN
     createSection(MovePage, "Auto Gun")
     createToggle(MovePage, "Auto Pickup Gun", false, function(v)
         if Features.AutoGun then Features.AutoGun:setEnabled(v) end
     end)
 
-    --// AUTO FARM
     createSection(MovePage, "💰 Auto Farm")
 
     createToggle(MovePage, "Enable Auto Farm", false, function(v)
@@ -948,7 +938,6 @@ function UI:init(Features)
     farmInfo.TextXAlignment = Enum.TextXAlignment.Left
     farmInfo.Parent = MovePage
 
-    --// AUTO KILL
     createSection(MovePage, "💥 Auto Kill Murderer")
 
     createToggle(MovePage, "Enable Auto Kill Murder", false, function(v)
@@ -963,7 +952,6 @@ function UI:init(Features)
         end
     end)
 
-    --// SPEED
     createSection(MovePage, "Speed")
     createToggle(MovePage, "Enable Speed", false, function(v)
         if Features.Speed then Features.Speed:setEnabled(v) end
@@ -1099,7 +1087,7 @@ function UI:init(Features)
     infoText.Size = UDim2.new(1, -20, 1, 0)
     infoText.Position = UDim2.new(0, 10, 0, 0)
     infoText.BackgroundTransparency = 1
-    infoText.Text = "TrustHub v14.2\n\nF4  — toggle menu\n\nTabs:\nAimbot | Murderer | Fling | Visuals | Movement | Animation | Settings"
+    infoText.Text = "TrustHub v15.0\n\nF4  — toggle menu\n\nTabs:\nAimbot | Murderer | Fling | Visuals | Movement | Animation | Settings"
     infoText.TextColor3 = Theme.TextDim
     infoText.Font = Enum.Font.Gotham
     infoText.TextSize = 12

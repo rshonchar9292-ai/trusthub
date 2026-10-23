@@ -1,6 +1,5 @@
 --// ============================================================
---// TrustHub Silent Aim v7.0 — Namecall Hook (Ultimate)
---// Перехоплює FireServer від зброї та підміняє координати
+--// TrustHub Silent Aim v7.1 — Namecall Hook (Fixed Client Crash)
 --// ============================================================
 
 local Players = game:GetService("Players")
@@ -84,24 +83,19 @@ local function installHook()
             local args = {...}
 
             if Config.Enabled and not checkcaller() then
-                -- Перехоплюємо виклики FireServer / InvokeServer
                 if method == "FireServer" or method == "InvokeServer" then
                     local target = getMurderer()
                     if target then
                         local targetPos = getPredictedPosition(target)
                         if targetPos then
-                            -- Шукаємо аргументи, які схожі на позицію або CFrame
                             for i, arg in ipairs(args) do
                                 local argType = typeof(arg)
                                 if argType == "CFrame" then
-                                    -- Змінюємо напрямок CFrame на ціль
                                     args[i] = CFrame.new(arg.Position, targetPos)
                                 elseif argType == "Vector3" then
-                                    -- Змінюємо Vector3 на позицію цілі
                                     args[i] = targetPos
                                 end
                             end
-                            -- Виводимо в консоль для перевірки
                             print("[SilentAim] Перехоплено постріл у:", target.Name)
                         end
                     end
@@ -165,10 +159,11 @@ function Module:setHitChance(v) end
 function Module:setPrediction(v) Config.Prediction = v end
 function Module:setTeamCheck(v) end
 function Module:setWallCheck(v) end
-function Module:setShowFOV(v) fovCircle.Visible = v end
+function Module:setShowFOV(v) if fovCircle then fovCircle.Visible = v end end
 function Module:setTargetPart(v) Config.Headshot = v end
 
-game:BindToClose(function()
+--// Коректне очищення при виході з гри (для клієнта)
+LocalPlayer.OnTeleport:Connect(function()
     removeHook()
     if fovCircle then pcall(function() fovCircle:Remove() end) end
 end)

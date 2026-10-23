@@ -1,212 +1,151 @@
 --// ============================================================
---// TrustHub Silent Aim v4.0 — MM2 (Remote FireServer)
---// Логіка взята з сурсу KITI (fn73, fn75)
+--// TrustHub Silent Aim v6.0 — Murderer Target (Mouse.Hit)
+--// Автоматично наводиться ТІЛЬКИ на Вбивцю (з ножем)
 --// ============================================================
 
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 local GuiService = game:GetService("GuiService")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
+local Mouse = LocalPlayer:GetMouse()
 
---// ============================================================
---// CONFIG (налаштування з нашого UI)
---// ============================================================
 local Config = {
     Enabled = false,
-    FOV = 150,
-    HitChance = 100,
-    Prediction = 2.8, -- В оригіналі це offset (за замовчуванням 2.8)
-    TeamCheck = false,
-    WallCheck = false,
+    FOV = 360, -- Ставимо великий FOV, щоб точно влучати
     ShowFOV = true,
+    Headshot = true, -- Стріляти в голову
 }
 
 local fovCircle = nil
+local oldIndex = nil
+local hooked = false
 
 --// ============================================================
---// FOV CIRCLE (Drawing API)
+--// FOV CIRCLE
 --// ============================================================
-local hasDrawing = pcall(function()
-    local d = Drawing.new("Circle")
-    d:Remove()
-end)
-
+local hasDrawing = pcall(function() local d = Drawing.new("Circle"); d:Remove() end)
 if hasDrawing then
     fovCircle = Drawing.new("Circle")
     fovCircle.Thickness = 1.5
     fovCircle.NumSides = 64
     fovCircle.Filled = false
-    fovCircle.Color = Color3.fromRGB(120, 140, 255)
-    fovCircle.Transparency = 0.6
+    fovCircle.Color = Color3.fromRGB(255, 60, 60) -- Червоне коло
+    fovCircle.Transparency = 0.5
     fovCircle.Visible = false
 end
 
 --// ============================================================
---// ДОПОМІЖНІ ФУНКЦІЇ (з сурсу)
+--// ФУНКЦІЯ ПОШУКУ ВБИВЦІ
 --// ============================================================
 local function getMurderer()
     for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= LocalPlayer then
-            local bp = plr:FindFirstChild("Backpack")
-            if bp and bp:FindFirstChild("Knife") then return plr end
-            if plr.Character and plr.Character:FindFirstChild("Knife") then return plr end
+        if plr ~= LocalPlayer and plr.Character then
+            local hum = plr.Character:FindFirstChildOfClass("Humanoid")
+            if hum and hum.Health > 0 then
+                -- Перевіряємо, чи є ніж у руках або в рюкзаку
+                local hasKnife = plr.Character:FindFirstChild("Knife") or (plr:FindFirstChild("Backpack") and plr.Backpack:FindFirstChild("Knife"))
+                if hasKnife then
+                    return plr
+                end
+            end
         end
     end
     return nil
 end
 
---// Розрахунок передбачення позиції (fn73 з сурсу)
-local function getPredictedPosition(plr)
-    local char = plr.Character
-    if not char then return nil end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hrp or not hum then return nil end
-    
-    local velocity = hrp.AssemblyLinearVelocity
-    local position = hrp.Position
-    -- Формула з оригінального скрипта
-    return position + velocity * Vector3.new(0.75, 0.5, 0.75) * (Config.Prediction / 15) + hum.MoveDirection * Config.Prediction
-end
+--// ============================================================
+--// ХУК МИШІ (Підміна Mouse.Hit)
+--// ============================================================
+local function installHook()
+    if hooked then return end
+    local ok, err = pcall(function()
+        local mt = getrawmetatable(game)
+        oldIndex = mt.__index
+        setreadonly(mt, false)
 
---// Пошук цілі
-local function findTarget()
-    local mousePos = UserInputService:GetMouseLocation()
-    local inset = GuiService:GetGuiInset()
-    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2) - Vector2.new(inset.X, inset.Y)
-    
-    -- Пріоритет: Шукаємо Вбивцю
-    local murderer = getMurderer()
-    if murderer and murderer.Character then
-        local hum = murderer.Character:FindFirstChildOfClass("Humanoid")
-        if hum and hum.Health > 0 then
-            local hrp = murderer.Character:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                local sp, onScreen = Camera:WorldToViewportPoint(hrp.Position)
-                if onScreen then
-                    local dist = (Vector2.new(sp.X, sp.Y) - center).Magnitude
-                    if dist <= Config.FOV then
-                        return murderer
-                    end
-                end
-            end
-        end
-    end
-    
-    -- Якщо Вбивці немає, шукаємо найближчого
-    local closest, closestDist = nil, Config.FOV
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= LocalPlayer and plr.Character then
-            local hum = plr.Character:FindFirstChildOfClass("Humanoid")
-            if hum and hum.Health > 0 then
-                local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
-                if hrp then
-                    local sp, onScreen = Camera:WorldToViewportPoint(hrp.Position)
-                    if onScreen then
-                        local dist = (Vector2.new(sp.X, sp.Y) - center).Magnitude
-                        if dist <= closestDist then
-                            closest = plr
-                            closestDist = dist
+        mt.__index = newcclosure(function(self, key)
+            -- Якщо функція увімкнена і це не наш власний виклик
+            if Config.Enabled and not checkcaller() then
+                if self == Mouse and key == "Hit" then
+                    local murderer = getMurderer()
+                    if murderer and murderer.Character then
+                        local targetPart = Config.Headshot and murderer.Character:FindFirstChild("Head") or murderer.Character:FindFirstChild("HumanoidRootPart")
+                        if targetPart then
+                            -- Повертаємо CFrame голови вбивці замість позиції миші
+                            return CFrame.new(targetPart.Position)
                         end
                     end
                 end
             end
-        end
-    end
-    return closest
+            return oldIndex(self, key)
+        end)
+
+        setreadonly(mt, true)
+        hooked = true
+        print("[SilentAim] Хук встановлено (Mouse.Hit -> Murderer)")
+    end)
+    if not ok then warn("[SilentAim] Помилка хука: " .. tostring(err)) end
+end
+
+local function removeHook()
+    if not hooked or not oldIndex then return end
+    pcall(function()
+        local mt = getrawmetatable(game)
+        setreadonly(mt, false)
+        mt.__index = oldIndex
+        setreadonly(mt, true)
+    end)
+    hooked = false
+    print("[SilentAim] Хук знято")
 end
 
 --// ============================================================
---// ГОЛОВНА ФУНКЦІЯ СТРІЛЬБИ (fn31 та fn75 з сурсу)
+--// RENDER LOOP (Візуалізація)
 --// ============================================================
-local function doShoot()
-    if not Config.Enabled then return end
-    if math.random(1, 100) > Config.HitChance then return end
-    
-    local target = findTarget()
-    if not target then return end
-    
-    local char = LocalPlayer.Character
-    if not char then return end
-    
-    -- Шукаємо зброю
-    local gun = char:FindFirstChild("Gun") or LocalPlayer.Backpack:FindFirstChild("Gun")
-    if not gun then return end
-    
-    -- Екіпіруємо, якщо в рюкзаку
-    if gun.Parent == LocalPlayer.Backpack then
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        if hum then hum:EquipTool(gun) end
-    end
-    
-    local rightHand = char:FindFirstChild("RightHand") or char:FindFirstChild("Right Arm")
-    if not rightHand then return end
-    
-    local targetPos = getPredictedPosition(target)
-    if not targetPos then return end
-    
-    -- Викликаємо RemoteEvent (як у fn75)
-    local shootRemote = gun:FindFirstChild("Shoot") or (gun:FindFirstChild("Events") and gun.Events:FindFirstChild("Shoot"))
-    
-    if shootRemote then
-        shootRemote:FireServer(CFrame.new(rightHand.Position), CFrame.new(targetPos))
-        print("[SilentAim] Shot fired at:", target.Name)
-    end
-end
-
---// ============================================================
---// ОБРОБКА ВВОДУ (стрільба на ЛКМ)
---// ============================================================
-UserInputService.InputBegan:Connect(function(input, gpe)
-    if gpe then return end
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        doShoot()
-    end
-end)
-
---// ============================================================
---// RENDER LOOP (FOV)
---// ============================================================
-RunService.RenderStepped:Connect(function()
+game:GetService("RunService").RenderStepped:Connect(function()
     if fovCircle then
         local inset = GuiService:GetGuiInset()
         fovCircle.Position = UserInputService:GetMouseLocation() - Vector2.new(inset.X, inset.Y)
         fovCircle.Radius = Config.FOV
         fovCircle.Visible = Config.Enabled and Config.ShowFOV
         
-        if findTarget() then
-            fovCircle.Color = Color3.fromRGB(255, 60, 60)
+        -- Коло стає яскраво-червоним, якщо вбивця знайдений
+        if getMurderer() then
+            fovCircle.Color = Color3.fromRGB(255, 0, 0)
         else
-            fovCircle.Color = Color3.fromRGB(120, 140, 255)
+            fovCircle.Color = Color3.fromRGB(150, 150, 150)
         end
     end
 end)
 
 --// ============================================================
---// MODULE API (Підключення до ui.lua)
+--// API ДЛЯ UI
 --// ============================================================
 local Module = {}
 Module.__index = Module
+function Module.new() return setmetatable({}, Module) end
 
-function Module.new()
-    return setmetatable({}, Module)
-end
-
-function Module:setEnabled(v) 
-    Config.Enabled = v 
-    print("[SilentAim] Enabled:", v) 
+function Module:setEnabled(v)
+    Config.Enabled = v
+    if v then installHook() else removeHook() end
+    print("[SilentAim] Enabled:", v)
 end
 
 function Module:setFOV(v) Config.FOV = v end
-function Module:setHitChance(v) Config.HitChance = v end
-function Module:setPrediction(v) Config.Prediction = v end
-function Module:setTeamCheck(v) Config.TeamCheck = v end
-function Module:setWallCheck(v) Config.WallCheck = v end
+function Module:setHitChance(v) end -- Ігноруємо, тут завжди 100%
+function Module:setPrediction(v) end -- Ігноруємо, гра сама рахує
+function Module:setTeamCheck(v) end -- Ігноруємо
+function Module:setWallCheck(v) end -- Ігноруємо
 function Module:setShowFOV(v) Config.ShowFOV = v end
-function Module:setTargetPart(v) end -- Ігноруємо, стріляємо завжди в HRP
+function Module:setTargetPart(v) Config.Headshot = v end
+
+-- Видаляємо хук при виході
+game:BindToClose(function()
+    removeHook()
+    if fovCircle then pcall(function() fovCircle:Remove() end) end
+end)
 
 return Module.new()

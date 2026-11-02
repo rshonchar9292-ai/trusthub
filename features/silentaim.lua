@@ -1,171 +1,153 @@
---// ============================================================
---// TrustHub Silent Aim v7.1 — Namecall Hook (Fixed Client Crash)
---// ============================================================
-
+--// features/silentaim.lua
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
-local GuiService = game:GetService("GuiService")
+local UserInputService = game:GetService("UserInputService")
 
 local LocalPlayer = Players.LocalPlayer
-local Camera = Workspace.CurrentCamera
+local Mouse = LocalPlayer:GetMouse()
 
-local Config = {
+local SilentAim = {}
+
+--// Налаштування (відповідають твоєму UI)
+local settings = {
     Enabled = false,
-    FOV = 150,
+    FOV = 200,
     HitChance = 100,
-    Prediction = 2.8,
-    Headshot = true,
+    Prediction = 0.135,
+    TeamCheck = true,
+    WallCheck = false,
+    ShowFOV = true
 }
 
+local targetPart = nil
+local oldIndex = nil
 local fovCircle = nil
-local oldNamecall = nil
-local hooked = false
 
---// ============================================================
---// FOV CIRCLE
---// ============================================================
-local hasDrawing = pcall(function() local d = Drawing.new("Circle"); d:Remove() end)
-if hasDrawing then
-    fovCircle = Drawing.new("Circle")
-    fovCircle.Thickness = 1.5
-    fovCircle.NumSides = 64
-    fovCircle.Filled = false
-    fovCircle.Color = Color3.fromRGB(120, 140, 255)
-    fovCircle.Transparency = 0.5
-    fovCircle.Visible = false
-end
-
---// ============================================================
---// ПОШУК ВБИВЦІ
---// ============================================================
-local function getMurderer()
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= LocalPlayer and plr.Character then
-            local hum = plr.Character:FindFirstChildOfClass("Humanoid")
-            if hum and hum.Health > 0 then
-                local hasKnife = plr.Character:FindFirstChild("Knife") or (plr:FindFirstChild("Backpack") and plr.Backpack:FindFirstChild("Knife"))
-                if hasKnife then
-                    return plr
-                end
-            end
-        end
+--// Створення кола FOV (через Drawing API, якщо є)
+local function createFOVCircle()
+    if fovCircle then fovCircle:Remove() end
+    if Drawing then
+        fovCircle = Drawing.new("Circle")
+        fovCircle.Thickness = 1
+        fovCircle.Color = Color3.fromRGB(120, 140, 255)
+        fovCircle.Filled = false
+        fovCircle.Radius = settings.FOV
+        fovCircle.Visible = false
     end
-    return nil
 end
 
---// Розрахунок передбачення позиції
-local function getPredictedPosition(plr)
-    local char = plr.Character
-    if not char then return nil end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hrp or not hum then return nil end
+--// Пошук цілі (найближчий гравець до центру екрану/миші в радіусі FOV)
+local function getTarget()
+    local closest = nil
+    local shortestDist = settings.FOV
     
-    local velocity = hrp.AssemblyLinearVelocity
-    local position = hrp.Position
-    return position + velocity * Vector3.new(0.75, 0.5, 0.75) * (Config.Prediction / 15) + hum.MoveDirection * Config.Prediction
-end
+    -- Використовуємо позицію миші для перевірки відстані
+    local mousePos = Vector2.new(Mouse.X, Mouse.Y + 36) -- 36 - це врахування GuiInset (верхня панель Roblox)
 
---// ============================================================
---// ХУК NAMECALL (Перехоплення FireServer)
---// ============================================================
-local function installHook()
-    if hooked then return end
-    local ok, err = pcall(function()
-        local mt = getrawmetatable(game)
-        oldNamecall = mt.__namecall
-        setreadonly(mt, false)
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local char = player.Character
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            
+            if hum and hum.Health > 0 then
+                -- Перевірка команди
+                if settings.TeamCheck and player.Team == LocalPlayer.Team then
+                    continue
+                end
+                
+                -- Шукаємо голову або HRP
+                local part = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
+                
+                if part then
+                    -- Перевірка стін
+                    if settings.WallCheck then
+                        local rayParams = RaycastParams.new()
+                        rayParams.FilterDescendantsInstances = {LocalPlayer.Character, char}
+                        rayParams.FilterType = Enum.RaycastFilterType.Exclude
+                        local result = Workspace:Raycast(workspace.CurrentCamera.CFrame.Position, part.Position - workspace.CurrentCamera.CFrame.Position, rayParams)
+                        if result then continue end
+                    end
 
-        mt.__namecall = newcclosure(function(self, ...)
-            local method = getnamecallmethod()
-            local args = {...}
-
-            if Config.Enabled and not checkcaller() then
-                if method == "FireServer" or method == "InvokeServer" then
-                    local target = getMurderer()
-                    if target then
-                        local targetPos = getPredictedPosition(target)
-                        if targetPos then
-                            for i, arg in ipairs(args) do
-                                local argType = typeof(arg)
-                                if argType == "CFrame" then
-                                    args[i] = CFrame.new(arg.Position, targetPos)
-                                elseif argType == "Vector3" then
-                                    args[i] = targetPos
-                                end
-                            end
-                            print("[SilentAim] Перехоплено постріл у:", target.Name)
+                    -- Перевірка відстані до миші (FOV)
+                    local screenPos, onScreen = workspace.CurrentCamera:WorldToViewportPoint(part.Position)
+                    if onScreen then
+                        local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+                        if dist < shortestDist then
+                            shortestDist = dist
+                            closest = part
                         end
                     end
                 end
             end
-            return oldNamecall(self, table.unpack(args))
-        end)
-
-        setreadonly(mt, true)
-        hooked = true
-        print("[SilentAim] Namecall Hook активовано!")
-    end)
-    if not ok then warn("[SilentAim] Помилка хука: " .. tostring(err)) end
-end
-
-local function removeHook()
-    if not hooked or not oldNamecall then return end
-    pcall(function()
-        local mt = getrawmetatable(game)
-        setreadonly(mt, false)
-        mt.__namecall = oldNamecall
-        setreadonly(mt, true)
-    end)
-    hooked = false
-    print("[SilentAim] Namecall Hook знято")
-end
-
---// ============================================================
---// RENDER LOOP (FOV)
---// ============================================================
-RunService.RenderStepped:Connect(function()
-    if fovCircle then
-        local inset = GuiService:GetGuiInset()
-        fovCircle.Position = UserInputService:GetMouseLocation() - Vector2.new(inset.X, inset.Y)
-        fovCircle.Radius = Config.FOV
-        fovCircle.Visible = Config.Enabled
-        
-        if getMurderer() then
-            fovCircle.Color = Color3.fromRGB(255, 60, 60)
-        else
-            fovCircle.Color = Color3.fromRGB(120, 140, 255)
         end
+    end
+    
+    return closest
+end
+
+--// Оновлення цілі кожен кадр
+RunService.RenderStepped:Connect(function()
+    if not settings.Enabled then
+        targetPart = nil
+        if fovCircle then fovCircle.Visible = false end
+        return
+    end
+
+    -- Оновлення кола FOV
+    if fovCircle then
+        fovCircle.Position = Vector2.new(Mouse.X, Mouse.Y + 36)
+        fovCircle.Radius = settings.FOV
+        fovCircle.Visible = settings.ShowFOV
+    end
+
+    -- Оновлення цілі
+    if math.random(1, 100) <= settings.HitChance then
+        targetPart = getTarget()
+    else
+        targetPart = nil
     end
 end)
 
---// ============================================================
---// API ДЛЯ UI
---// ============================================================
-local Module = {}
-Module.__index = Module
-function Module.new() return setmetatable({}, Module) end
-
-function Module:setEnabled(v)
-    Config.Enabled = v
-    if v then installHook() else removeHook() end
-    print("[SilentAim] Enabled:", v)
+--// Основна функція вмикання (Хук)
+function SilentAim:setEnabled(state)
+    settings.Enabled = state
+    if state then
+        if not oldIndex and hookmetamethod then
+            oldIndex = hookmetamethod(game, "__index", function(self, key)
+                -- Перехоплюємо тільки звернення гри (не нашого скрипта) до Mouse.Hit
+                if not checkcaller() and self == Mouse and targetPart then
+                    if key == "Hit" then
+                        -- Додаємо Prediction (компенсація пінгу)
+                        local predictedPos = targetPart.Position + (targetPart.Velocity * settings.Prediction)
+                        return CFrame.new(predictedPos)
+                    elseif key == "Target" then
+                        return targetPart
+                    end
+                end
+                return oldIndex(self, key)
+            end)
+        end
+        createFOVCircle()
+    else
+        if oldIndex then
+            hookmetamethod(game, "__index", oldIndex)
+            oldIndex = nil
+        end
+        if fovCircle then
+            fovCircle:Remove()
+            fovCircle = nil
+        end
+    end
 end
 
-function Module:setFOV(v) Config.FOV = v end
-function Module:setHitChance(v) end
-function Module:setPrediction(v) Config.Prediction = v end
-function Module:setTeamCheck(v) end
-function Module:setWallCheck(v) end
-function Module:setShowFOV(v) if fovCircle then fovCircle.Visible = v end end
-function Module:setTargetPart(v) Config.Headshot = v end
+--// Експорт налаштувань для UI
+function SilentAim:setFOV(val) settings.FOV = val end
+function SilentAim:setHitChance(val) settings.HitChance = val end
+function SilentAim:setPrediction(val) settings.Prediction = val end
+function SilentAim:setTeamCheck(state) settings.TeamCheck = state end
+function SilentAim:setWallCheck(state) settings.WallCheck = state end
+function SilentAim:setShowFOV(state) settings.ShowFOV = state end
 
---// Коректне очищення при виході з гри (для клієнта)
-LocalPlayer.OnTeleport:Connect(function()
-    removeHook()
-    if fovCircle then pcall(function() fovCircle:Remove() end) end
-end)
-
-return Module.new()
+print("[TrustHub] Silent Aim (Pulse-style) loaded.")
+return SilentAim

@@ -585,7 +585,7 @@ function UI:init(Features)
     local AnimationPage = createTab("Animation", "🎭")
     local SettingsPage  = createTab("Settings", "S")
 
-    --// AIMBOT
+    --// AIMBOT (Налаштування під наш Silent Aim)
     createSection(AimPage, "Silent Aim")
 
     createToggle(AimPage, "Enable Silent Aim", false, function(v)
